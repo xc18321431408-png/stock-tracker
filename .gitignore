@@ -1,0 +1,4 @@
+data/sectors.db
+__pycache__/
+*.pyc
+.DS_Store

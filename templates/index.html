@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>美股板块追踪 + 量化交易 v2.0</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+:root {
+  --bg:#0f172a; --card:#1e293b; --border:#334155;
+  --text:#e2e8f0; --muted:#94a3b8; --green:#22c55e; --red:#ef4444;
+  --blue:#3b82f6; --accent:#06b6d4; --gold:#f59e0b;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;padding:16px}
+.container{max-width:1600px;margin:0 auto}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid var(--border)}
+.tab{padding:10px 20px;cursor:pointer;border:none;background:none;color:var(--muted);font-size:14px;font-weight:600;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .2s}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* Header */
+.header{display:flex;justify-content:space-between;align-items:center;padding:12px 0;margin-bottom:16px;flex-wrap:wrap;gap:8px}
+.header h1{font-size:22px}
+.header h1 span{color:var(--accent)}
+.meta{font-size:12px;color:var(--muted)}
+
+/* Date slider */
+.date-nav{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
+.date-nav input[type=range]{flex:1;min-width:200px;accent-color:var(--accent)}
+.date-nav select{background:var(--card);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px}
+.date-nav button{background:var(--accent);border:none;color:#fff;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px}
+.date-nav button:hover{opacity:.85}
+.date-nav .date-label{font-weight:700;color:var(--accent);min-width:90px;text-align:center;font-size:14px}
+
+/* Cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+.card .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
+.card .val{font-size:28px;font-weight:700}
+.card .val.up{color:var(--green)} .card .val.down{color:var(--red)}
+.card .sub{font-size:11px;color:var(--muted);margin-top:4px}
+
+/* Category sections */
+.cat-section{margin-bottom:24px}
+.cat-title{font-size:16px;font-weight:700;margin-bottom:10px;padding:8px 14px;background:var(--card);border-radius:8px;border-left:3px solid var(--accent);cursor:pointer}
+.cat-title:hover{background:#253349}
+
+/* Sector grid */
+.sector-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;margin-bottom:8px}
+.sector-item{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;transition:all .2s;display:flex;justify-content:space-between;align-items:center}
+.sector-item:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.3)}
+.sector-item .sym{font-size:11px;color:var(--muted)}
+.sector-item .chg{font-weight:700;font-size:14px}
+.chg.up{color:var(--green)} .chg.down{color:var(--red)}
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:100;justify-content:center;align-items:center}
+.modal-overlay.show{display:flex}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px;max-width:1100px;width:98%;max-height:90vh;overflow-y:auto;position:relative}
+.modal h3{font-size:20px;margin-bottom:16px}
+.modal .close{position:absolute;top:12px;right:16px;background:none;border:none;color:var(--muted);font-size:24px;cursor:pointer}
+.modal table{width:100%;border-collapse:collapse}
+.modal th{text-align:left;padding:8px 12px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)}
+.modal td{padding:8px 12px;font-size:14px;border-bottom:1px solid rgba(255,255,255,.04)}
+.modal .loading{text-align:center;padding:40px;color:var(--muted)}
+
+/* Chart */
+.chart-box{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px}
+.chart-box h3{font-size:15px;margin-bottom:12px}
+canvas{max-height:380px}
+
+/* Quant Panel */
+.quant-panel{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+.quant-form{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+.quant-form label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px}
+.quant-form select,.quant-form input{width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:14px}
+.quant-form button{width:100%;padding:12px;margin-top:16px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+.quant-form button:hover{opacity:.85}
+.quant-result{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+.quant-result .metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.quant-result .metric{text-align:center;padding:12px;background:var(--bg);border-radius:8px}
+.quant-result .metric .mv{font-size:24px;font-weight:700}
+.quant-result .metric .ml{font-size:11px;color:var(--muted)}
+
+.footer{text-align:center;padding:20px;color:var(--muted);font-size:11px;border-top:1px solid var(--border);margin-top:20px}
+
+@media(max-width:768px){
+  .quant-panel{grid-template-columns:1fr}
+  .sector-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('dashboard')">📊 板块追踪</button>
+  <button class="tab" onclick="switchTab('bubble')">🫧 涨跌气泡图</button>
+  <button class="tab" onclick="switchTab('quant')">📈 量化交易</button>
+</div>
+
+<!-- ==================== DASHBOARD TAB ==================== -->
+<div id="tab-dashboard">
+<div class="header">
+  <div>
+    <h1>🇺🇸 <span>美股板块追踪</span> v2.0</h1>
+    <div class="meta"><span id="status"></span> | <span id="dateLabel"></span> | 共 <span id="totalSectors">-</span> 个子板块</div>
+  </div>
+  <div class="meta">每日7:00自动更新 | 数据: StockAnalysis</div>
+</div>
+
+<div class="date-nav">
+  <button onclick="navigateDate(-1)">◀ 前一天</button>
+  <input type="range" id="dateSlider" min="0" max="100" value="100" oninput="onSliderChange(this.value)" title="拖动选择日期">
+  <button onclick="navigateDate(1)">后一天 ▶</button>
+  <span class="date-label" id="selectedDateLabel">最新</span>
+  <button onclick="navigateToLatest()" style="background:var(--card);border:1px solid var(--border);">🔁 回到最新</button>
+</div>
+
+<div class="cards" id="summaryCards"></div>
+
+<div class="chart-box">
+  <h3>📊 子板块涨跌幅 Top/Bottom 15</h3>
+  <canvas id="mainChart"></canvas>
+</div>
+
+<div id="categoriesContainer"></div>
+
+<!-- Modal for sector detail -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <button class="close" onclick="closeModal()">&times;</button>
+    <h3 id="modalTitle">🔍 板块详情</h3>
+    <div id="modalContent" class="loading">加载中...</div>
+  </div>
+</div>
+</div>
+
+<!-- ==================== BUBBLE CHART TAB ==================== -->
+<div id="tab-bubble" style="display:none">
+<div class="header">
+  <div>
+    <h1>🫧 <span>板块涨跌气泡图</span></h1>
+    <div class="meta"><span id="bubbleDate"></span> | 气泡大小=成交量 | 绿色=涨 红色=跌</div>
+  </div>
+</div>
+<div class="chart-box" style="min-height:600px">
+  <canvas id="bubbleChart"></canvas>
+</div>
+</div>
+
+<!-- ==================== QUANT TAB ==================== -->
+<div id="tab-quant" style="display:none">
+<div class="header">
+  <div>
+    <h1>📈 <span>量化交易回测平台</span></h1>
+    <div class="meta">基于历史数据的策略回测 | 仅供研究参考</div>
+  </div>
+</div>
+
+<div class="quant-panel">
+  <div class="quant-form">
+    <h3 style="margin-bottom:12px">⚙️ 策略参数</h3>
+    <label>交易标的</label>
+    <input type="text" id="btSymbol" value="SPY" placeholder="SPY / QQQ / AAPL...">
+
+    <label>策略类型</label>
+    <select id="btStrategy" onchange="updateParams()">
+      <option value="ma_cross">均线交叉 (MA Crossover)</option>
+      <option value="rsi">RSI 均值回归</option>
+      <option value="momentum">动量突破 (Momentum)</option>
+      <option value="sector_rotation">行业轮动 (Sector Rotation)</option>
+    </select>
+
+    <div id="btParams"></div>
+
+    <button onclick="runBacktest()">🚀 开始回测</button>
+    <div style="margin-top:8px;font-size:11px;color:var(--muted)">
+      ⚠️ 回测结果不代表未来收益。数据基于近1年历史价格。
+    </div>
+  </div>
+
+  <div class="quant-result" id="btResult">
+    <h3 style="margin-bottom:16px">📋 回测结果</h3>
+    <div class="metric-grid">
+      <div class="metric"><div class="ml">总收益率</div><div class="mv" id="btTotalReturn">-</div></div>
+      <div class="metric"><div class="ml">买入持有</div><div class="mv" id="btBuyHold">-</div></div>
+      <div class="metric"><div class="ml">夏普比率</div><div class="mv" id="btSharpe">-</div></div>
+      <div class="metric"><div class="ml">最大回撤</div><div class="mv" id="btMaxDD">-</div></div>
+      <div class="metric"><div class="ml">胜率</div><div class="mv" id="btWinRate">-</div></div>
+      <div class="metric"><div class="ml">交易次数</div><div class="mv" id="btTrades">-</div></div>
+    </div>
+    <div style="margin-top:16px;font-size:11px;color:var(--muted)" id="btMeta"></div>
+  </div>
+</div>
+
+<!-- Backtest History -->
+<div class="chart-box" style="margin-top:20px">
+  <h3>📜 回测历史记录</h3>
+  <table style="width:100%;border-collapse:collapse" id="btHistoryTable">
+    <thead><tr>
+      <th style="text-align:left;padding:8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">时间</th>
+      <th style="text-align:left;padding:8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">标的</th>
+      <th style="text-align:left;padding:8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">策略</th>
+      <th style="text-align:right;padding:8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">收益率</th>
+      <th style="text-align:right;padding:8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">夏普</th>
+      <th style="text-align:right;padding:8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">回撤</th>
+    </tr></thead>
+    <tbody></tbody>
+  </table>
+</div>
+</div>
+
+<div class="footer">US Stock Sector Tracker v2.0 | 数据每日7:00更新 | 不构成投资建议</div>
+</div>
+
+<script>
+// ── Tab Switching ──
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    t.classList.toggle('active', (tab==='dashboard'&&i===0)||(tab==='bubble'&&i===1)||(tab==='quant'&&i===2));
+  });
+  document.getElementById('tab-dashboard').style.display = tab==='dashboard'?'block':'none';
+  document.getElementById('tab-bubble').style.display = tab==='bubble'?'block':'none';
+  document.getElementById('tab-quant').style.display = tab==='quant'?'block':'none';
+  if (tab==='quant') loadBacktestHistory();
+  if (tab==='bubble') renderBubbleChart();
+}
+
+// ── Dashboard ──
+let allSectors = [];
+let allDates = [];
+let currentDateIdx = -1; // -1 = latest
+
+async function loadDates() {
+  try {
+    const resp = await fetch('/api/dates');
+    allDates = (await resp.json()).reverse(); // ASC order: oldest first
+    if (allDates.length > 0) {
+      document.getElementById('dateSlider').max = allDates.length - 1;
+      document.getElementById('dateSlider').value = allDates.length - 1; // newest at end
+      currentDateIdx = allDates.length - 1;
+    }
+  } catch(e) {}
+}
+
+function onSliderChange(val) {
+  currentDateIdx = parseInt(val);
+  const date = allDates[currentDateIdx];
+  document.getElementById('selectedDateLabel').textContent = date || '加载中...';
+  loadDashboard(date);
+}
+
+function navigateDate(dir) {
+  // dates are DESC [newest(0), ..., oldest(N-1)]
+  // dir=-1 means go newer (前一天), dir=+1 means go older (后一天)
+  // Invert: -1 becomes -1 (newer/smaller index), +1 becomes +1 (older/larger index)
+  // Actually: "前一天" = older = +1, "后一天" = newer = -1
+  currentDateIdx = Math.max(0, Math.min(allDates.length - 1, currentDateIdx + dir));
+  document.getElementById('dateSlider').value = currentDateIdx;
+  const date = allDates[currentDateIdx];
+  document.getElementById('selectedDateLabel').textContent = date;
+  loadDashboard(date);
+}
+
+async function loadDashboard(specificDate) {
+  try {
+    const url = specificDate ? '/api/latest?date=' + specificDate : '/api/latest';
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if (data.error) { document.getElementById('dateLabel').textContent = data.error; return; }
+
+    allSectors = data.sectors || [];
+    document.getElementById('dateLabel').textContent = '数据日期: ' + data.date;
+    if (!specificDate) {
+      document.getElementById('selectedDateLabel').textContent = data.date;
+      // Update slider to latest
+      if (allDates.length > 0) {
+        currentDateIdx = allDates.length - 1;
+        document.getElementById('dateSlider').value = currentDateIdx;
+      }
+    }
+    document.getElementById('status').innerHTML = data.fetched==='live'
+      ? '<span style="color:var(--green)">● 实时</span>'
+      : '<span style="color:var(--blue)">● 已缓存</span>';
+    document.getElementById('totalSectors').textContent = allSectors.filter(s=>s.category!=='指数').length;
+
+    renderSummary(allSectors);
+    renderChart(allSectors);
+    renderCategories(allSectors);
+  } catch(e) { console.error(e); }
+}
+
+function renderSummary(sectors) {
+  const sub = sectors.filter(s => s.category !== '指数');
+  const up = sub.filter(s => s.change_pct > 0).length;
+  const down = sub.filter(s => s.change_pct < 0).length;
+  const best = sub.length ? sub.reduce((a,b) => a.change_pct > b.change_pct ? a : b) : null;
+  const worst = sub.length ? sub.reduce((a,b) => a.change_pct < b.change_pct ? a : b) : null;
+  const spy = sectors.find(s => s.symbol === 'SPY');
+
+  document.getElementById('summaryCards').innerHTML = `
+    <div class="card"><div class="lbl">📈 上涨板块</div><div class="val up">${up}</div><div class="sub">/ ${sub.length} 个子板块</div></div>
+    <div class="card"><div class="lbl">📉 下跌板块</div><div class="val down">${down}</div><div class="sub">占比 ${sub.length?Math.round(down/sub.length*100):0}%</div></div>
+    <div class="card"><div class="lbl">🏆 最强</div><div class="val up">${best?best.change_pct.toFixed(2)+'%':'-'}</div><div class="sub">${best?best.name:''} (${best?best.symbol:''})</div></div>
+    <div class="card"><div class="lbl">💔 最弱</div><div class="val down">${worst?worst.change_pct.toFixed(2)+'%':'-'}</div><div class="sub">${worst?worst.name:''} (${worst?worst.symbol:''})</div></div>
+    <div class="card"><div class="lbl">📊 标普500</div><div class="val ${spy&&spy.change_pct>=0?'up':'down'}">${spy?'$'+spy.close.toFixed(2):'-'}</div><div class="sub">${spy?(spy.change_pct>=0?'+':'')+spy.change_pct.toFixed(2)+'%':''}</div></div>
+  `;
+}
+
+function renderChart(sectors) {
+  const sub = sectors.filter(s => s.category !== '指数').sort((a,b) => b.change_pct - a.change_pct);
+  const top15 = sub.slice(0, 15);
+  const bot15 = sub.slice(-15).reverse();
+  const show = [...top15, ...bot15];
+
+  const ctx = document.getElementById('mainChart').getContext('2d');
+  if (window._chart) window._chart.destroy();
+  window._chart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: show.map(s => s.symbol + ' ' + s.name),
+      datasets: [{
+        label: '涨跌幅 %',
+        data: show.map(s => s.change_pct),
+        backgroundColor: show.map(s => s.change_pct >= 0 ? 'rgba(34,197,94,.7)' : 'rgba(239,68,68,.7)'),
+        borderRadius: 3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,.05)' }, ticks: { color: '#94a3b8', callback: v => v+'%' } },
+        y: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function renderCategories(sectors) {
+  const sub = sectors.filter(s => s.category !== '指数');
+  const cats = [...new Set(sub.map(s => s.category))];
+
+  let html = '';
+  for (const cat of cats) {
+    const items = sub.filter(s => s.category === cat).sort((a,b) => b.change_pct - a.change_pct);
+    html += `<div class="cat-section">
+      <div class="cat-title">📂 ${cat} (${items.length}个子板块)</div>
+      <div class="sector-grid">`;
+    for (const s of items) {
+      const cls = s.change_pct >= 0 ? 'up' : 'down';
+      const sign = s.change_pct >= 0 ? '+' : '';
+      html += `<div class="sector-item" onclick="openSectorDetail('${s.name}')">
+        <div><strong>${s.name}</strong><br><span class="sym">${s.symbol} | \$${s.close.toFixed(2)}</span></div>
+        <div class="chg ${cls}">${sign}${s.change_pct.toFixed(2)}%</div>
+      </div>`;
+    }
+    html += `</div></div>`;
+  }
+  document.getElementById('categoriesContainer').innerHTML = html;
+}
+
+// ── Modal for Top 10 Stocks ──
+async function openSectorDetail(name) {
+  document.getElementById('modalOverlay').classList.add('show');
+  document.getElementById('modalTitle').textContent = '🔍 ' + name + ' — 龙头股 Top 10';
+  document.getElementById('modalContent').innerHTML = '<div class="loading">⏳ 加载中...</div>';
+
+  try {
+    const resp = await fetch('/api/sector/' + encodeURIComponent(name));
+    const data = await resp.json();
+    if (!data.stocks || data.stocks.length === 0) {
+      document.getElementById('modalContent').innerHTML = '<p style="color:var(--muted)">该板块暂无龙头股数据</p>';
+      return;
+    }
+    window._sectorStocks = data.stocks;
+    let html = '<table><thead><tr><th>#</th><th>代码</th><th>公司</th><th>简介</th><th>最新价</th><th>涨跌</th><th>K线</th></tr></thead><tbody>';
+    for (let i = 0; i < data.stocks.length; i++) {
+      const s = data.stocks[i];
+      const cls = s.change_pct >= 0 ? 'up' : 'down';
+      const sign = s.change_pct >= 0 ? '+' : '';
+      html += '<tr>' +
+        '<td style="color:var(--muted)">' + (i+1) + '</td>' +
+        '<td><strong>' + s.symbol + '</strong></td>' +
+        '<td style="font-size:12px">' + (s.name || '-') + '</td>' +
+        '<td style="font-size:11px;color:var(--muted);max-width:160px">' + (s.desc || '') + '</td>' +
+        '<td>$' + s.close.toFixed(2) + '</td>' +
+        '<td class="' + cls + '" style="font-weight:700">' + sign + s.change_pct.toFixed(2) + '%</td>' +
+        '<td><button onclick="showChart(\'' + s.symbol + '\',\'' + i + '\')" style="background:var(--accent);border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">📈 查看</button></td>' +
+      '</tr>';
+    }
+    html += '</tbody></table>';
+    html += '<div id="chartContainer" style="margin-top:16px;height:500px;background:var(--bg);border-radius:8px;overflow:hidden">';
+    html += '<p style="text-align:center;padding-top:200px;color:var(--muted)">👆 点击上方「📈 查看」按钮查看K线图</p>';
+    html += '</div>';
+    document.getElementById('modalContent').innerHTML = html;
+  } catch(e) {
+    document.getElementById('modalContent').innerHTML = '<p style="color:var(--red)">加载失败: ' + e.message + '</p>';
+  }
+}
+
+function showChart(symbol, idx) {
+  // Highlight selected row
+  const rows = document.querySelectorAll('#modalContent tbody tr');
+  rows.forEach((r, i) => { r.style.background = i === parseInt(idx) ? 'rgba(6,182,212,0.15)' : ''; });
+
+  const container = document.getElementById('chartContainer');
+  container.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">⏳ 加载K线数据...</div>';
+
+  // Fetch OHLC data from our own API
+  fetch('/api/stock/' + symbol + '/history')
+    .then(r => r.json())
+    .then(data => {
+      if (data.error || !data.ohlc || data.ohlc.length < 10) {
+        container.innerHTML = '<p style="text-align:center;padding-top:200px;color:var(--red)">❌ 数据加载失败</p>';
+        return;
+      }
+      renderEChartsCandlestick(symbol, data.ohlc);
+    })
+    .catch(e => {
+      container.innerHTML = '<p style="text-align:center;padding-top:200px;color:var(--red)">❌ 请求失败: ' + e.message + '</p>';
+    });
+}
+
+function calcMA(data, period) {
+  const result = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) { result.push(null); continue; }
+    let sum = 0;
+    for (let j = 0; j < period; j++) sum += data[i - j][1]; // close price
+    result.push(+(sum / period).toFixed(2));
+  }
+  return result;
+}
+
+function calcBB(data, period, mult) {
+  // Bollinger Bands: middle=SMA, upper=SMA+mult*std, lower=SMA-mult*std
+  const mid = [], upper = [], lower = [];
+  for (let i = 0; i < data.length; i++) {
+    if (i < period - 1) { mid.push(null); upper.push(null); lower.push(null); continue; }
+    let sum = 0;
+    for (let j = 0; j < period; j++) sum += data[i - j][2]; // close
+    const avg = sum / period;
+    let variance = 0;
+    for (let j = 0; j < period; j++) variance += Math.pow(data[i - j][2] - avg, 2);
+    const std = Math.sqrt(variance / period);
+    mid.push(+avg.toFixed(2));
+    upper.push(+(avg + mult * std).toFixed(2));
+    lower.push(+(avg - mult * std).toFixed(2));
+  }
+  return { mid, upper, lower };
+}
+
+function calcRegression(prices, futureDays) {
+  // Simple linear regression on close prices, project forward
+  const n = prices.length;
+  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+  for (let i = 0; i < n; i++) {
+    sumX += i; sumY += prices[i]; sumXY += i * prices[i]; sumX2 += i * i;
+  }
+  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
+  const intercept = (sumY - slope * sumX) / n;
+
+  const line = [];
+  for (let i = 0; i < n + futureDays; i++) {
+    line.push(+(intercept + slope * i).toFixed(2));
+  }
+  return { line, slope, intercept };
+}
+
+function monteCarloSim(lastPrice, dailyVolatility, days, simulations) {
+  // Geometric Brownian Motion Monte Carlo simulation
+  const results = [];
+  for (let s = 0; s < simulations; s++) {
+    let price = lastPrice;
+    for (let d = 0; d < days; d++) {
+      // Box-Muller transform for normal random
+      const u1 = Math.random() || 0.0001;
+      const u2 = Math.random();
+      const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      price *= Math.exp(dailyVolatility * z);
+    }
+    results.push(price);
+  }
+  results.sort((a, b) => a - b);
+  const p10 = results[Math.floor(simulations * 0.1)];
+  const p50 = results[Math.floor(simulations * 0.5)];
+  const p90 = results[Math.floor(simulations * 0.9)];
+  return { p10, p50, p90, lastPrice, days };
+}
+
+function renderEChartsCandlestick(symbol, ohlc) {
+  const container = document.getElementById('chartContainer');
+  container.innerHTML = '' +
+    '<div style="display:flex;gap:12px;margin-bottom:4px;align-items:center">' +
+      '<span style="color:var(--accent);font-weight:700;font-size:14px">🕯️ ' + symbol + ' K线 + 走势预测</span>' +
+      '<span style="color:var(--muted);font-size:10px;margin-left:8px">布林带 | 线性回归 | 蒙特卡洛概率区间</span>' +
+    '</div>' +
+    '<div id="echart-main" style="height:380px;width:100%"></div>' +
+    '<div id="echart-vol" style="height:100px;width:100%"></div>' +
+    '<div id="prediction-summary" style="margin-top:8px;padding:8px 12px;background:var(--card);border-radius:8px;font-size:11px;color:var(--muted)"></div>';
+
+  const dates = ohlc.map(d => d[0]);
+  const ohlcData = ohlc.map(d => [d[1], d[2], d[3], d[4]]);
+  const closes = ohlc.map(d => d[2]);
+  const volumes = ohlc.map(d => d[5]);
+  const lastPrice = closes[closes.length - 1];
+  const lastDate = dates[dates.length - 1];
+
+  // Indicators
+  const ma5 = calcMA(ohlc, 5);
+  const ma10 = calcMA(ohlc, 10);
+  const ma20 = calcMA(ohlc, 20);
+  const bb = calcBB(ohlc, 20, 2);
+
+  // Regression trend
+  const N = Math.min(30, closes.length);
+  const recentCloses = closes.slice(-N);
+  const reg = calcRegression(recentCloses, 10);
+
+  // Monte Carlo
+  const dailyReturns = [];
+  for (let i = 1; i < closes.length; i++) {
+    if (closes[i-1] > 0) dailyReturns.push(Math.log(closes[i] / closes[i-1]));
+  }
+  const avgRet = dailyReturns.reduce((a,b) => a+b, 0) / dailyReturns.length;
+  const variance = dailyReturns.reduce((a,b) => a + Math.pow(b - avgRet, 2), 0) / dailyReturns.length;
+  const dailyVol = Math.sqrt(variance);
+  const mc = monteCarloSim(lastPrice, dailyVol, 10, 500);
+
+  // Build prediction x-axis labels
+  const lastDateObj = new Date(lastDate);
+  const predDates = [];
+  for (let i = 1; i <= 10; i++) {
+    const d = new Date(lastDateObj);
+    d.setDate(d.getDate() + i);
+    // Skip weekends
+    if (d.getDay() === 0) d.setDate(d.getDate() + 1);
+    if (d.getDay() === 6) d.setDate(d.getDate() + 2);
+    const ds = d.toISOString().slice(0, 10);
+    predDates.push(ds);
+  }
+  const allDates = [...dates, ...predDates];
+
+  // Regression line (full length)
+  const regFull = [];
+  for (let i = 0; i < dates.length - N; i++) regFull.push(null);
+  for (let i = 0; i < reg.line.length; i++) regFull.push(reg.line[i]);
+
+  // MC cone on prediction dates
+  const mcUpper = []; const mcLower = [];
+  for (let i = 0; i < dates.length; i++) { mcUpper.push(null); mcLower.push(null); }
+  mcUpper.push(lastPrice); mcLower.push(lastPrice);
+  const mcPrices = [lastPrice];
+  for (let d = 1; d <= 10; d++) {
+    const drift = Math.exp(avgRet * d);
+    const vol = Math.exp(dailyVol * Math.sqrt(d) * 1.28); // 80% CI
+    const upper = lastPrice * drift * vol;
+    const lower = lastPrice * drift / vol;
+    mcUpper.push(+upper.toFixed(2));
+    mcLower.push(+lower.toFixed(2));
+  }
+
+  // Buy/Sell signal detection based on MA cross + Bollinger
+  const signals = [];
+  for (let i = 20; i < ohlc.length; i++) {
+    if (ma5[i] && ma10[i] && ma5[i-1] && ma10[i-1]) {
+      if (ma5[i-1] <= ma10[i-1] && ma5[i] > ma10[i]) {
+        signals.push({ coord: [dates[i], closes[i]], value: 'BUY', itemStyle: { color: '#22c55e' } });
+      }
+      if (ma5[i-1] >= ma10[i-1] && ma5[i] < ma10[i]) {
+        signals.push({ coord: [dates[i], closes[i]], value: 'SELL', itemStyle: { color: '#ef4444' } });
+      }
+    }
+    // Bollinger break
+    if (bb.lower[i] && closes[i] < bb.lower[i]) {
+      signals.push({ coord: [dates[i], closes[i]*0.97], value: '超卖', itemStyle: { color: '#f59e0b' } });
+    }
+    if (bb.upper[i] && closes[i] > bb.upper[i]) {
+      signals.push({ coord: [dates[i], closes[i]*1.03], value: '超买', itemStyle: { color: '#06b6d4' } });
+    }
+  }
+  const recentSignals = signals.filter(s => s.coord[0] >= dates[dates.length - 30]);
+
+  // Candlestick chart with predictions
+  const mainChart = echarts.init(document.getElementById('echart-main'), 'dark');
+  mainChart.setOption({
+    tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
+    legend: { data: ['K线','MA5','MA10','MA20','布林上轨','布林中轨','布林下轨','回归趋势','预测上界','预测下界'],
+      textStyle: { color: '#94a3b8', fontSize: 10 }, top: 0, itemWidth: 14, itemHeight: 8 },
+    grid: { left: '8%', right: '3%', top: '8%', bottom: '5%' },
+    xAxis: { type: 'category', data: allDates, axisLabel: { color: '#94a3b8', fontSize: 9, formatter: v => v.slice(5) }, axisLine: { lineStyle: { color: '#334155' } } },
+    yAxis: { type: 'value', scale: true, axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
+    series: [
+      { name: 'K线', type: 'candlestick', data: ohlcData, itemStyle: { color: '#22c55e', color0: '#ef4444', borderColor: '#22c55e', borderColor0: '#ef4444' }, z: 3 },
+      { name: '布林上轨', type: 'line', data: bb.upper, lineStyle: { width: 1, color: 'rgba(34,197,94,0.4)' }, symbol: 'none', z: 1 },
+      { name: '布林中轨', type: 'line', data: bb.mid, lineStyle: { width: 1, color: 'rgba(245,158,11,0.5)' }, symbol: 'none', z: 1 },
+      { name: '布林下轨', type: 'line', data: bb.lower, lineStyle: { width: 1, color: 'rgba(239,68,68,0.4)' }, symbol: 'none', z: 1,
+        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [{ offset: 0, color: 'rgba(239,68,68,0.05)' }, { offset: 1, color: 'rgba(34,197,94,0.05)' }] } } },
+      { name: 'MA5', type: 'line', data: ma5, smooth: true, lineStyle: { width: 1, color: '#f59e0b' }, symbol: 'none', z: 2 },
+      { name: 'MA10', type: 'line', data: ma10, smooth: true, lineStyle: { width: 1, color: '#3b82f6' }, symbol: 'none', z: 2 },
+      { name: 'MA20', type: 'line', data: ma20, smooth: true, lineStyle: { width: 1, color: '#a855f7' }, symbol: 'none', z: 2 },
+      { name: '回归趋势', type: 'line', data: regFull, lineStyle: { width: 2, color: '#f97316', type: 'dashed' }, symbol: 'none', z: 4 },
+      { name: '预测上界', type: 'line', data: mcUpper, lineStyle: { width: 1, color: 'rgba(34,197,94,0.6)', type: 'dotted' }, symbol: 'none', z: 4,
+        areaStyle: { color: 'rgba(34,197,94,0.08)' } },
+      { name: '预测下界', type: 'line', data: mcLower, lineStyle: { width: 1, color: 'rgba(239,68,68,0.6)', type: 'dotted' }, symbol: 'none', z: 4 },
+      { name: '信号', type: 'scatter', data: recentSignals, symbolSize: 12,
+        label: { show: true, formatter: p => p.value, fontSize: 9, color: '#fff', fontWeight: 'bold' } },
+    ]
+  });
+
+  // Volume chart (unchanged)
+  const volChart = echarts.init(document.getElementById('echart-vol'), 'dark');
+  volChart.setOption({
+    grid: { left: '8%', right: '3%', top: '5%', bottom: '5%' },
+    xAxis: { type: 'category', data: dates, axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false } },
+    yAxis: { type: 'value', axisLabel: { color: '#94a3b8', fontSize: 9, formatter: v => v > 1e6 ? (v/1e6).toFixed(0)+'M' : (v/1e3).toFixed(0)+'K' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
+    series: [{
+      name: '成交量', type: 'bar', data: volumes.map((v, i) => ohlc[i][2] >= ohlc[i][1] ? v : -v),
+      itemStyle: { color: v => v > 0 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)' }
+    }]
+  });
+
+  mainChart.group = 'stockGroup'; volChart.group = 'stockGroup';
+  echarts.connect('stockGroup');
+
+  // Prediction summary
+  const trend = reg.slope > 0.001 ? '📈 看涨' : reg.slope < -0.001 ? '📉 看跌' : '📊 震荡';
+  const lastBB = bb.lower[bb.lower.length-1] && lastPrice < bb.lower[bb.lower.length-1] ? ' (超卖区)' : '';
+  const lastBBu = bb.upper[bb.upper.length-1] && lastPrice > bb.upper[bb.upper.length-1] ? ' (超买区)' : '';
+  document.getElementById('prediction-summary').innerHTML = '' +
+    '<strong>🔮 走势预测:</strong> 线性回归趋势 <span style="color:' + (reg.slope>0?'#22c55e':'#ef4444') + '">' + trend + '</span> | ' +
+    '10日后预测中位数 <strong>$' + mc.p50.toFixed(2) + '</strong> (80%置信区间: $' + mc.p10.toFixed(2) + ' ~ $' + mc.p90.toFixed(2) + ') | ' +
+    '布林带位置: ' + lastPrice.toFixed(2) + lastBB + lastBBu + ' | ' +
+    '日波动率: ' + (dailyVol*100).toFixed(2) + '% | ' +
+    '<span style="font-size:10px;color:var(--muted)">仅供参考，不构成投资建议</span>';
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('show');
+}
+document.getElementById('modalOverlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ── Quant Backtest ──
+function updateParams() {
+  const strat = document.getElementById('btStrategy').value;
+  let html = '';
+  if (strat === 'ma_cross') {
+    html = '<label>快线周期</label><input type="number" id="pFast" value="5" min="2" max="50">'
+         + '<label>慢线周期</label><input type="number" id="pSlow" value="20" min="5" max="200">';
+  } else if (strat === 'rsi') {
+    html = '<label>RSI 周期</label><input type="number" id="pPeriod" value="14" min="5" max="50">'
+         + '<label>超卖阈值</label><input type="number" id="pOversold" value="30" min="10" max="40">'
+         + '<label>超买阈值</label><input type="number" id="pOverbought" value="70" min="60" max="90">';
+  } else if (strat === 'momentum') {
+    html = '<label>回看天数</label><input type="number" id="pLookback" value="20" min="5" max="120">';
+  } else if (strat === 'sector_rotation') {
+    html = '<label>动量回看天数</label><input type="number" id="pLookback" value="5" min="3" max="30">';
+  }
+  document.getElementById('btParams').innerHTML = html;
+}
+
+async function runBacktest() {
+  const symbol = document.getElementById('btSymbol').value.toUpperCase();
+  const strategy = document.getElementById('btStrategy').value;
+  const params = {};
+
+  if (strategy === 'ma_cross') {
+    params.fast = parseInt(document.getElementById('pFast')?.value || 5);
+    params.slow = parseInt(document.getElementById('pSlow')?.value || 20);
+  } else if (strategy === 'rsi') {
+    params.period = parseInt(document.getElementById('pPeriod')?.value || 14);
+    params.oversold = parseInt(document.getElementById('pOversold')?.value || 30);
+    params.overbought = parseInt(document.getElementById('pOverbought')?.value || 70);
+  } else if (strategy === 'momentum' || strategy === 'sector_rotation') {
+    params.lookback = parseInt(document.getElementById('pLookback')?.value || 20);
+  }
+
+  document.getElementById('btResult').innerHTML = '<h3>📋 回测结果</h3><p style="color:var(--muted)">⏳ 正在计算...</p>';
+
+  try {
+    const resp = await fetch('/api/backtest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol, strategy, params })
+    });
+    const data = await resp.json();
+    if (data.error) {
+      document.getElementById('btResult').innerHTML = '<h3>📋 回测结果</h3><p style="color:var(--red)">❌ ' + data.error + '</p>';
+      return;
+    }
+
+    const cls = data.total_return >= 0 ? 'up' : 'down';
+    const bhc = data.buy_hold_return >= 0 ? 'up' : 'down';
+    document.getElementById('btResult').innerHTML = `
+      <h3 style="margin-bottom:16px">📋 回测结果 — ${symbol} (${strategy})</h3>
+      <div class="metric-grid">
+        <div class="metric"><div class="ml">策略收益率</div><div class="mv ${cls}">${data.total_return>=0?'+':''}${data.total_return}%</div></div>
+        <div class="metric"><div class="ml">买入持有</div><div class="mv ${bhc}">${data.buy_hold_return>=0?'+':''}${data.buy_hold_return}%</div></div>
+        <div class="metric"><div class="ml">夏普比率</div><div class="mv" style="color:var(--accent)">${data.sharpe}</div></div>
+        <div class="metric"><div class="ml">最大回撤</div><div class="mv" style="color:var(--red)">-${data.max_drawdown}%</div></div>
+        <div class="metric"><div class="ml">胜率</div><div class="mv">${data.win_rate}%</div></div>
+        <div class="metric"><div class="ml">交易次数</div><div class="mv">${data.trades}</div></div>
+      </div>`;
+    document.getElementById('btMeta').textContent = `参数: ${JSON.stringify(params)} | 策略跑赢买入持有: ${data.total_return > data.buy_hold_return ? '✅ 是' : '❌ 否'}`;
+    loadBacktestHistory();
+  } catch(e) {
+    document.getElementById('btResult').innerHTML = '<h3>📋 回测结果</h3><p style="color:var(--red)">❌ 网络请求失败，请检查服务器是否运行</p><p style="font-size:11px;color:var(--muted)">' + e.message + '</p>';
+  }
+}
+
+async function loadBacktestHistory() {
+  try {
+    const resp = await fetch('/api/backtest/history?limit=10');
+    const data = await resp.json();
+    let html = '';
+    for (const r of data) {
+      const cls = r.total_return >= 0 ? 'color:var(--green)' : 'color:var(--red)';
+      html += `<tr>
+        <td style="padding:6px 8px;font-size:11px;color:var(--muted);border-bottom:1px solid rgba(255,255,255,.04)">${(r.created_at||'').slice(0,16)}</td>
+        <td style="padding:6px 8px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.04)"><strong>${r.symbol}</strong></td>
+        <td style="padding:6px 8px;font-size:12px;border-bottom:1px solid rgba(255,255,255,.04)">${r.strategy}</td>
+        <td style="padding:6px 8px;font-size:13px;font-weight:700;text-align:right;border-bottom:1px solid rgba(255,255,255,.04);${cls}">${r.total_return>=0?'+':''}${r.total_return}%</td>
+        <td style="padding:6px 8px;font-size:12px;text-align:right;border-bottom:1px solid rgba(255,255,255,.04)">${r.sharpe}</td>
+        <td style="padding:6px 8px;font-size:12px;text-align:right;color:var(--red);border-bottom:1px solid rgba(255,255,255,.04)">-${r.max_drawdown}%</td>
+      </tr>`;
+    }
+    document.getElementById('btHistoryTable').querySelector('tbody').innerHTML = html || '<tr><td colspan="6" style="padding:16px;color:var(--muted);text-align:center">暂无回测记录</td></tr>';
+  } catch(e) {}
+}
+
+// ── Bubble Chart ──
+function renderBubbleChart() {
+  const sub = allSectors.filter(s => s.category !== '指数');
+  if (sub.length === 0) { loadDashboard(); return; }
+
+  document.getElementById('bubbleDate').textContent = '数据日期: ' + (document.getElementById('dateLabel')?.textContent || '');
+
+  // Group sectors by category for x-axis positioning
+  const cats = [...new Set(sub.map(s => s.category))];
+  const catColors = {
+    '科技':'#3b82f6','金融':'#f59e0b','医疗健康':'#22c55e','能源':'#ef4444',
+    '工业':'#8b5cf6','消费品':'#ec4899','房地产':'#06b6d4','通信服务':'#f97316',
+    '基础材料':'#84cc16','公用事业':'#6366f1','全球':'#e11d48'
+  };
+
+  // Build datasets
+  const datasets = [];
+  const maxVol = Math.max(...sub.map(s => s.volume || 0), 1);
+
+  // Each sector is a bubble
+  const bubbles = sub.map(s => {
+    const catIdx = cats.indexOf(s.category);
+    const xJitter = (Math.random() - 0.5) * 0.4; // small horizontal jitter within category
+    const bubbleR = Math.max(5, Math.sqrt((s.volume || 1) / maxVol) * 40);
+    return {
+      x: catIdx + xJitter,
+      y: s.change_pct,
+      r: bubbleR,
+      symbol: s.symbol,
+      name: s.name,
+      category: s.category,
+      change: s.change_pct,
+      close: s.close,
+      volume: s.volume
+    };
+  });
+
+  const greenBubbles = bubbles.filter(b => b.change >= 0);
+  const redBubbles = bubbles.filter(b => b.change < 0);
+
+  const ctx = document.getElementById('bubbleChart').getContext('2d');
+  if (window._bubbleChart) window._bubbleChart.destroy();
+
+  window._bubbleChart = new Chart(ctx, {
+    type: 'bubble',
+    data: {
+      datasets: [
+        {
+          label: '📈 上涨板块',
+          data: greenBubbles,
+          backgroundColor: greenBubbles.map(() => 'rgba(34,197,94,0.7)'),
+          borderColor: greenBubbles.map(() => '#22c55e'),
+          borderWidth: 1.5,
+        },
+        {
+          label: '📉 下跌板块',
+          data: redBubbles,
+          backgroundColor: redBubbles.map(() => 'rgba(239,68,68,0.7)'),
+          borderColor: redBubbles.map(() => '#ef4444'),
+          borderWidth: 1.5,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const b = ctx.raw;
+              const sign = b.change >= 0 ? '+' : '';
+              const vol = b.volume ? (b.volume/1e6).toFixed(1)+'M' : '';
+              return [
+                b.symbol + ' ' + b.name,
+                '涨跌: ' + sign + b.change.toFixed(2) + '%',
+                '价格: $' + b.close.toFixed(2),
+                '成交量: ' + vol
+              ];
+            }
+          }
+        },
+        legend: { position: 'top', labels: { color: '#e2e8f0', font: { size: 14 }, usePointStyle: true, padding: 20 } }
+      },
+      scales: {
+        x: {
+          title: { display: true, text: '板块分类', color: '#94a3b8' },
+          ticks: {
+            callback: v => cats[Math.round(v)] || '',
+            color: '#94a3b8',
+            font: { size: 11 }
+          },
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          min: -0.5,
+          max: cats.length - 0.5,
+        },
+        y: {
+          title: { display: true, text: '涨跌幅 (%)', color: '#94a3b8' },
+          ticks: { color: '#94a3b8', callback: v => v + '%' },
+          grid: {
+            color: ctx => ctx.tick.value === 0 ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.05)',
+            lineWidth: ctx => ctx.tick.value === 0 ? 2 : 1,
+          },
+        }
+      }
+    },
+    plugins: [{
+      id: 'zeroLine',
+      afterDraw: chart => {
+        const { ctx, scales: { x, y } } = chart;
+        const yZero = y.getPixelForValue(0);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 4]);
+        ctx.beginPath();
+        ctx.moveTo(x.left, yZero);
+        ctx.lineTo(x.right, yZero);
+        ctx.stroke();
+        // Add "分界线" label
+        ctx.fillStyle = '#94a3b8';
+        ctx.font = '11px Microsoft YaHei';
+        ctx.fillText('── 涨跌分界线 ──', x.right - 140, yZero - 6);
+        ctx.setLineDash([]);
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+function navigateToLatest() {
+  loadDashboard();
+  document.getElementById('selectedDateLabel').textContent = allDates[allDates.length-1] || '最新';
+}
+
+// ── Init ──
+updateParams();
+loadDates().then(() => loadDashboard());
+setInterval(loadDashboard, 600000);
+</script>
+</body>
+</html>
