@@ -81,8 +81,8 @@ body{font-family:-apple-system,'Microsoft YaHei','PingFang SC','Noto Sans SC',sa
 .modal td{padding:10px 14px;font-size:14px;border-bottom:1px solid rgba(255,255,255,.04)}
 .modal .loading{text-align:center;padding:40px;color:var(--muted)}
 
-/* Chart */
-.chart-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:24px;box-shadow:var(--card-shadow);overflow-x:auto}
+.chart-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:24px;box-shadow:var(--card-shadow)}
+.chart-scroll{overflow:auto;width:100%}
 .chart-box h3{font-size:16px;margin-bottom:16px;color:var(--text);font-weight:700}
 canvas{max-height:380px}
 
@@ -235,7 +235,9 @@ canvas{max-height:380px}
   </div>
 </div>
 <div class="chart-box" style="min-height:650px">
-  <div id="correlationChart" style="min-height:650px"></div>
+  <div class="chart-scroll">
+    <div id="correlationChart" style="min-height:650px"></div>
+  </div>
 </div>
 </div>
 
@@ -1283,8 +1285,7 @@ async function renderRotationChart() {
         emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } }
       }]
     });
-    chart.resize({ width: el.clientWidth, height: totalH });
-    console.log('[Rotation] rendered ok');
+    console.log('[Rotation] rendered ok', { sectors: sectors.length, width: el.clientWidth, height: el.clientHeight });
   } catch(e) {
     console.error('[Rotation] error', e);
     el.innerHTML = '<div style="text-align:center;padding-top:180px;color:var(--red)">❌ 图表渲染失败: ' + e.message + '<br><span style="color:var(--muted);font-size:12px">请按 F12 打开控制台查看详细报错</span></div>';
@@ -1401,8 +1402,7 @@ async function renderCorrelationChart() {
         emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } }
       }]
     });
-    chart.resize({ width: minChartW, height: totalH });
-    console.log('[Correlation] rendered ok');
+    console.log('[Correlation] rendered ok', { names: names.length, minChartW, totalH, clientWidth: el.clientWidth, clientHeight: el.clientHeight });
   } catch(e) {
     console.error('[Correlation] error', e);
     el.innerHTML = '<div style="text-align:center;padding-top:180px;color:var(--red)">❌ 图表渲染失败: ' + e.message + '<br><span style="color:var(--muted);font-size:12px">请按 F12 打开控制台查看详细报错</span></div>';
