@@ -222,7 +222,7 @@ canvas{max-height:380px}
   </div>
 </div>
 <div class="chart-box" style="min-height:650px">
-  <div id="rotationChart" style="width:100%;height:100%"></div>
+  <div id="rotationChart" style="min-height:650px"></div>
 </div>
 </div>
 
@@ -235,7 +235,7 @@ canvas{max-height:380px}
   </div>
 </div>
 <div class="chart-box" style="min-height:650px">
-  <div id="correlationChart" style="width:100%;height:100%"></div>
+  <div id="correlationChart" style="min-height:650px"></div>
 </div>
 </div>
 
@@ -1230,8 +1230,6 @@ async function renderRotationChart() {
     }
     console.log('[Rotation] rendering', heatmapData.length, 'cells');
     if (window._rotChart) { window._rotChart.dispose(); window._rotChart = null; }
-    const chart = echarts.init(el, 'dark');
-    window._rotChart = chart;
 
     const showLabel = sectors.length <= 40;
     const fontSize = sectors.length <= 25 ? 13 : 11;
@@ -1241,6 +1239,9 @@ async function renderRotationChart() {
     const rowH = 36;
     const totalH = Math.max(420, sectors.length * rowH + 130);
     el.style.height = totalH + 'px';
+
+    const chart = echarts.init(el, 'dark');
+    window._rotChart = chart;
 
     chart.setOption({
       tooltip: {
@@ -1330,8 +1331,6 @@ async function renderCorrelationChart() {
     }
     console.log('[Correlation] rendering', names.length, 'x', names.length, 'cells=', heatData.length);
     if (window._corrChart) { window._corrChart.dispose(); window._corrChart = null; }
-    const chart = echarts.init(el, 'dark');
-    window._corrChart = chart;
 
     // Adjust label visibility based on density
     const showLabel = names.length <= 30;
@@ -1348,6 +1347,9 @@ async function renderCorrelationChart() {
     const minCellW = 28;
     const minChartW = names.length * minCellW + 280;
     el.style.width = minChartW + 'px';
+
+    const chart = echarts.init(el, 'dark');
+    window._corrChart = chart;
 
     chart.setOption({
       tooltip: {
