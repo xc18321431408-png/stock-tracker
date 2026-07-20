@@ -1,6 +1,7 @@
 """
-US Stock Market Sector Tracker v2.0
-- 40+ sub-industry ETFs for granular sector tracking
+US + China A-Share Stock Market Sector Tracker v3.0
+- 40+ US sub-industry ETFs
+- 30+ China A-Share sector ETFs
 - Top 10 constituent stocks per sector
 - Quantitative trading backtest platform
 - Security protections
@@ -20,10 +21,15 @@ ADMIN_USER = "admin"
 ADMIN_PASS = secrets.token_hex(8)
 rate_store = {}
 DB_PATH = os.path.join(os.path.dirname(__file__), 'data', 'sectors.db')
+CN_DB_PATH = os.path.join(os.path.dirname(__file__), 'data', 'cn_sectors.db')
 
 SA_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
     "Accept": "application/json",
+}
+
+YF_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
 }
 
 # ── 40+ Sub-Industry ETFs ───────────────────────────────────
@@ -330,9 +336,799 @@ SECTOR_STOCKS = {
         ("EMR","艾默生","工业自动化+过程控制全球巨头"), ("ZBRA","斑马技术","仓储/物流机器人+自动识别"),
         ("CGNX","康耐视","机器视觉/工业读码系统全球领导者"),
     ],
+    # ── 全球市场 ──
+    "日本市场": [
+        ("TM","丰田汽车","全球最大汽车制造商，混动技术领导者"),
+        ("SONY","索尼","游戏/影像/半导体/娱乐综合巨头"),
+        ("NTDOY","任天堂","Switch/塞尔达/马里奥，游戏IP之王"),
+        ("HMC","本田汽车","摩托车+汽车+电动化全球巨头"),
+        ("MUFG","三菱日联","日本最大银行集团"),
+        ("SMFG","三井住友","日本三大银行之一"),
+        ("TAK","武田制药","日本最大制药公司，全球化布局"),
+        ("KYOCY","京瓷","精密陶瓷/电子零部件/太阳能"),
+        ("SFTBY","软银集团","科技投资巨头，Arm大股东"),
+        ("CAJ","佳能","影像/光学/医疗设备全球领导者"),
+    ],
+    "德国市场": [
+        ("SAP","SAP","欧洲最大软件公司，ERP全球第一"),
+        ("SIEGY","西门子","工业自动化/医疗/能源综合巨头"),
+        ("DTEGY","德国电信","欧洲最大电信运营商"),
+        ("ALIZY","安联","全球最大保险和资产管理集团"),
+        ("BAMXF","宝马","豪华汽车三巨头之一"),
+        ("MBGYY","奔驰","豪华车龙头，电动化转型"),
+        ("VWAGY","大众","全球最大汽车集团，多品牌矩阵"),
+        ("BASFY","巴斯夫","全球最大化工公司"),
+        ("ADS","阿迪达斯","全球第二大运动品牌"),
+        ("IFNNY","英飞凌","欧洲最大半导体公司，汽车芯片"),
+    ],
+    "英国市场": [
+        ("AZN","阿斯利康","英瑞制药巨头，肿瘤药管线强劲"),
+        ("SHEL","壳牌","全球最大能源公司之一"),
+        ("UL","联合利华","全球消费品巨头，日化/食品"),
+        ("HSBC","汇丰","欧洲最大银行，亚洲业务重心"),
+        ("DEO","帝亚吉欧","全球最大洋酒公司"),
+        ("RELX","励讯","专业信息/展览/数据分析服务"),
+        ("LSEG","伦交所","伦敦证券交易所集团，金融数据"),
+        ("BTI","英美烟草","全球烟草四巨头之一"),
+        ("CPNG","Coupang","韩国最大电商（注：部分英国指数成分）"),
+        ("GSK","葛兰素史克","疫苗+呼吸/艾滋药物领导者"),
+    ],
+    "中国大盘": [
+        ("BABA","阿里巴巴","中国最大电商+云计算(AliCloud)"),
+        ("TCEHY","腾讯","中国最大互联网公司，微信/游戏/投资"),
+        ("JD","京东","中国最大自营电商+供应链物流"),
+        ("PDD","拼多多","中国增长最快电商+Temu全球扩张"),
+        ("BIDU","百度","中国AI+搜索引擎+自动驾驶Apollo"),
+        ("NIO","蔚来","中国高端电动车新势力"),
+        ("LI","理想汽车","中国增程式电动车领导者"),
+        ("XPEV","小鹏汽车","智能驾驶+飞行汽车"),
+        ("BEKE","贝壳","中国最大房产交易服务平台"),
+        ("ZTO","中通快递","中国最大快递物流公司之一"),
+    ],
+    "巴西市场": [
+        ("VALE","淡水河谷","全球最大铁矿石生产商"),
+        ("PBR","巴西石油","南美最大石油公司"),
+        ("ITUB","伊塔乌联合银行","巴西最大私营银行"),
+        ("ABEV","安贝夫","全球最大啤酒公司（百威英博旗下）"),
+        ("BBD","布拉德斯科银行","巴西大型银行集团"),
+        ("PETZ","Petz","巴西最大宠物零售连锁"),
+        ("GGB","盖尔道","巴西最大钢铁公司"),
+        ("CX","西麦斯","墨西哥水泥巨头，拉美业务广泛"),
+        ("SBS","塞比斯帕","巴西最大水务公司"),
+        ("UGP","Ultrapar","巴西最大石化分销商"),
+    ],
+    "印度市场": [
+        ("INFY","Infosys","印度第二大IT外包服务巨头"),
+        ("WIT","Wipro","印度IT服务/咨询全球领导者"),
+        ("HDB","HDFC银行","印度最大私营银行"),
+        ("IBN","ICICI银行","印度第二大私营银行"),
+        ("TTM","塔塔汽车","印度最大汽车集团，捷豹路虎母公司"),
+        ("VEDL","韦丹塔","印度最大矿业/金属集团"),
+        ("MIND","Mindtree","印度IT咨询与数字转型"),
+        ("MM","马恒达","印度最大汽车/拖拉机集团"),
+        ("RELIANCE","信实工业","印度最大民营企业，能源/零售/电信"),
+        ("SUNPHARMA","太阳制药","印度最大制药公司"),
+    ],
+    "韩国市场": [
+        ("TSM","台积电","注：韩国市场ETF含部分台湾/韩国半导体"),
+        ("LPL","LG显示","全球液晶面板领导者"),
+        ("KB","KB金融","韩国最大金融集团"),
+        ("SKM","SK电讯","韩国最大电信运营商"),
+        ("PKX","浦项制铁","全球最大钢铁公司之一"),
+        ("SHG","新韩金融","韩国大型银行集团"),
+        ("KEP","韩国电力","韩国最大电力公用事业"),
+        ("IX","ORIX","日本/韩国综合金融（部分持仓）"),
+        ("WP","Worley","韩国/澳洲能源工程服务"),
+        ("SSL","Sasol","南非/韩国能源化工（部分持仓）"),
+    ],
+    # ── 金融 ──
+    "区域银行": [
+        ("SCHW","嘉信理财","最大折扣券商，零售投资平台"),
+        ("PNC","PNC金融","区域性银行巨头，企业银行强"),
+        ("USB","美国合众银行","中西区银行龙头"),
+        ("TFC","Truist","BB&T+SunTrust合并，东南区巨擘"),
+        ("FITB","五三银行","俄亥俄/中西部区域银行"),
+        ("RF","Regions金融","美国东南区银行"),
+        ("CFG","公民金融","东北区银行， student lending"),
+        ("KEY","KeyCorp","俄亥俄/纽约区域银行"),
+        ("HBAN","Huntington","俄亥俄/密歇根社区银行"),
+        ("ZION","Zions Bancorp","犹他/西部区域银行"),
+    ],
+    "券商投行": [
+        ("GS","高盛","华尔街顶级投行，交易/并购王者"),
+        ("MS","摩根士丹利","财富管理+机构证券双支柱"),
+        ("SCHW","嘉信理财","最大零售券商+财富管理"),
+        ("IBKR","盈透证券","全球电子交易/做市商"),
+        ("HOOD","Robinhood","零佣金交易平台，Z世代券商"),
+        ("LAZR","Lazard","精品投行/资产管理"),
+        ("BLK","贝莱德","全球最大资产管理公司"),
+        ("STT","道富","全球托管/资产管理巨头"),
+        ("NTRS","北方信托","资产管理+私人银行"),
+        ("APO","阿波罗","另类投资/私募股权巨头"),
+    ],
+    "保险": [
+        ("BRK.B","伯克希尔","巴菲特旗下，保险+投资帝国"),
+        ("UNH","联合健康","美国最大健康保险，Optum医疗"),
+        ("PGR","前进保险","美国最大汽车保险之一"),
+        ("CI","信诺","健康保险+药房福利管理"),
+        ("HUM","哈门那","Medicare Advantage保险巨头"),
+        ("ELV","Elevance Health","蓝十字蓝盾协会最大成员"),
+        ("MET","大都会人寿","美国最大人寿保险之一"),
+        ("AFL","Aflac","补充保险/癌症保险全球知名"),
+        ("ALL","好事达","美国最大财产/意外险之一"),
+        ("TRV","旅行者","财产/意外险，道指成分股"),
+    ],
+    "抵押REITs": [
+        ("NLY","Annaly","美国最大抵押REIT，机构MBS"),
+        ("AGNC","AGNC投资","抵押REIT，机构MBS策略"),
+        ("STWD","Starwood","商业抵押/贷款REIT"),
+        ("LADR","Ladder Capital","商业抵押/贷款+证券"),
+        ("BXMT","Blackstone抵押","黑石旗下商业抵押REIT"),
+        ("ARI","Apollo Commercial","阿波罗旗下商业抵押"),
+        ("RC","Ready Capital","小型商业抵押/贷款"),
+        ("MFA","MFA Financial","住宅/商业抵押混合"),
+        ("ARR","ARMOUR Residential","住宅抵押REIT"),
+        ("CHMI","Cherry Hill","住宅抵押/服务"),
+    ],
+    # ── 医疗健康 ──
+    "生技": [
+        ("VRTX","Vertex","囊性纤维化特效药垄断者"),
+        ("REGN","再生元","抗体药物研发王者"),
+        ("MRNA","Moderna","mRNA技术平台，新冠+肿瘤疫苗"),
+        ("GILD","吉利德","抗病毒药物之王"),
+        ("BIIB","渤健","神经科学/阿尔茨海默药物"),
+        ("ALNY","Alnylam","RNAi疗法先驱"),
+        ("BMRN","BioMarin","罕见病酶替代疗法"),
+        ("EXAS","Exact Sciences","肠癌早筛Cologuard领导者"),
+        ("SRPT","Sarepta","杜氏肌营养不良基因疗法"),
+        ("IONS","Ionis","反义RNA药物平台"),
+    ],
+    "医疗设备": [
+        ("ABT","雅培","医疗多元化，诊断/器械/营养"),
+        ("MDT","美敦力","全球最大医疗器械，心脏起搏器"),
+        ("SYK","史赛克","骨科植入物+手术机器人"),
+        ("BSX","波士顿科学","心血管/内窥镜介入器械"),
+        ("ISRG","直觉外科","达芬奇手术机器人"),
+        ("BDX","碧迪","注射器/输液/诊断系统"),
+        ("EW","爱德华生命科学","心脏瓣膜(TAVR)垄断者"),
+        ("ZBH","捷迈邦美","骨科关节植入物"),
+        ("HOLX","豪洛捷","女性健康诊断+乳腺影像"),
+        ("BAX","百特","肾脏透析/输液泵"),
+    ],
+    # ── 能源 ──
+    "油服": [
+        ("SLB","斯伦贝谢","全球最大油田服务公司"),
+        ("BKR","贝克休斯","第二大油服，旋转设备"),
+        ("HAL","哈里伯顿","全球三大油服之一"),
+        ("NOV","国民油井","钻井设备/完井解决方案"),
+        ("FTI","TechnipFMC","海底生产/完井系统"),
+        ("PTEN","Patterson-UTI","美国陆地钻井承包商"),
+        ("HP","Helmerich","美国最大陆地钻井承包商"),
+        ("NBR","Nabors","全球钻井/油服设备"),
+        ("OII","Oceaneering","海底机器人/油气工程"),
+        ("RES","RPC","美国压裂/完井服务"),
+    ],
+    "风能": [
+        ("GE","GE Vernova","全球最大风机制造商之一"),
+        ("VWDRY","维斯塔斯","全球最大风机制造商"),
+        ("NPI","Northland Power","加拿大风电/可再生能源"),
+        ("ORA","Ormat","地热/储能/可再生能源"),
+        ("GNRC","Generac","备用发电机+储能/微电网"),
+        ("AME","安默生","工业自动化+风电控制"),
+        ("BWXT","BWX","核反应堆+清洁能源部件"),
+        ("CEG","Constellation","美国最大核电运营商"),
+        ("NEE","NextEra","全球最大风电/光伏运营商"),
+        ("BEP","Brookfield Renewable","全球可再生能源基础设施"),
+    ],
+    # ── 工业 ──
+    "基建工程": [
+        ("CAT","卡特彼勒","全球最大工程机械/矿山设备"),
+        ("DE","约翰迪尔","全球最大农业机械"),
+        ("VMC","火神材料","美国最大建筑骨料/沥青"),
+        ("MLM","Martin Marietta","第二大建筑骨料/水泥"),
+        ("FLR","Fluor","全球工程/建筑/项目管理巨头"),
+        ("J","Jacobs","工程/建筑/环保服务"),
+        ("DY","Dycom","电信基础设施施工"),
+        ("APG","APi Group","消防/安全/特种建筑"),
+        ("EME","EMCOR","机电/能源/基础设施服务"),
+        ("FIX","Comfort Systems","暖通/电气/管道承包"),
+    ],
+    # ── 消费品 ──
+    "娱乐餐饮": [
+        ("DIS","迪士尼","全球最大娱乐集团，影视/乐园/流媒体"),
+        ("NFLX","奈飞","全球最大流媒体平台"),
+        ("CMCSA","康卡斯特","NBC环球+最大有线电视"),
+        ("WBD","华纳兄弟探索","HBO/Discovery/DC影业"),
+        ("LYV","Live Nation","全球最大演唱会/票务平台"),
+        ("DKNG","DraftKings","美国最大数字体育博彩"),
+        ("MGM","美高梅","博彩/酒店/娱乐度假村"),
+        ("CZR","凯撒娱乐","美国最大博彩娱乐集团"),
+        ("WYNN","永利度假村","高端博彩/酒店"),
+        ("LVS","拉斯维加斯金沙","澳门/新加坡博彩度假村"),
+    ],
+    "食品饮料": [
+        ("KO","可口可乐","全球最大饮料公司"),
+        ("PEP","百事","饮料+零食全球巨头"),
+        ("MDLZ","亿滋","奥利奥/吉百利/趣多多全球"),
+        ("GIS","通用磨坊","麦片/酸奶/宠物食品"),
+        ("K","家乐氏","谷物早餐/零食/植物肉"),
+        ("CPB","金宝汤","罐头汤/零食/餐食"),
+        ("HSY","好时","北美最大巧克力制造商"),
+        ("MKC","味好美","全球最大香料/调味品"),
+        ("CAG","康尼格拉","冷冻食品/零食/配菜"),
+        ("LW","Lamb Weston","全球最大冷冻薯条供应商"),
+    ],
+    # ── 房地产 ──
+    "住宅REITs": [
+        ("AVB","AvalonBay","美国最大公寓REIT之一"),
+        ("EQR","Equity Residential","公寓REIT，高端住宅"),
+        ("UDR","UDR","公寓REIT， Sun Belt布局"),
+        ("CPT","Camden","公寓REIT， Sun Belt/德州"),
+        ("ESS","Essex","西海岸公寓REIT"),
+        ("MAA","Mid-America","东南部公寓REIT"),
+        ("AIRC","Apartment Income","中端公寓REIT"),
+        ("THO","Thor Industries","全美最大房车制造商（部分住宅指数）"),
+        ("CVCO","Cavco","模块化/预制房屋制造"),
+        ("SKY","Skyline Champion","预制房屋+HUD代码住房"),
+    ],
+    "工业REITs": [
+        ("PLD","Prologis","全球最大工业物流REIT"),
+        ("DRE","Duke Realty","工业/物流地产REIT（被PLD收购）"),
+        ("EGP","EastGroup"," Sun Belt工业REIT"),
+        ("FR","First Industrial","中西部/东部工业地产"),
+        ("TRNO","Terreno","沿海港口工业地产"),
+        ("REXR","Rexford","南加州工业REIT"),
+        ("CCI","Crown Castle","通信基础设施/铁塔REIT"),
+        ("AMT","American Tower","全球最大通信铁塔REIT"),
+        ("SBAC","SBA通信","通信铁塔/小型蜂窝"),
+        ("UNIT","Uniti","通信基础设施/光纤"),
+    ],
+    # ── 基础材料 ──
+    "白银": [
+        ("SLV","iShares白银","全球最大白银ETF（信托本身）"),
+        ("PAAS","泛美白银","全球最大原生银矿商之一"),
+        ("AG","First Majestic","墨西哥白银生产商"),
+        ("CDE","Coeur Mining","美国白银+黄金生产商"),
+        ("HL","Hecla Mining","美国最大白银生产商"),
+        ("SVM","希尔威金属","中国/加拿大白银矿商"),
+        ("EXK","Endeavour Silver","墨西哥中型白银矿商"),
+        ("MAG","MAG Silver","墨西哥白银勘探/开发"),
+        ("FSM","Fortuna Silver","拉美白银+金矿商"),
+        ("WPM","Wheaton Precious","白银/黄金权利金公司"),
+    ],
+    "矿业": [
+        ("BHP","必和必拓","全球最大矿业公司"),
+        ("RIO","力拓","全球第二大矿业巨头"),
+        ("VALE","淡水河谷","全球最大铁矿石生产商"),
+        ("TECK","泰克资源","加拿大多元化矿业"),
+        ("MT","安赛乐米塔尔","全球最大钢铁公司"),
+        ("CLF","Cleveland-Cliffs","美国最大扁钢生产商"),
+        ("MP","MP Materials","美国最大稀土生产商"),
+        ("SCCO","南方铜业","秘鲁最大铜矿/冶炼"),
+        ("FCX","自由港麦克莫兰","全球最大上市铜矿商"),
+        ("NEM","纽蒙特","全球最大金矿企业"),
+    ],
+    "金属矿业": [
+        ("FCX","自由港麦克莫兰","全球最大上市铜矿商"),
+        ("NEM","纽蒙特","全球最大金矿企业"),
+        ("SCCO","南方铜业","秘鲁最大铜矿"),
+        ("STLD","Steel Dynamics","美国电炉钢领导者"),
+        ("NUE","纽柯钢铁","美国最大钢铁回收/电炉钢"),
+        ("CLF","Cleveland-Cliffs","美国最大扁钢生产商"),
+        ("RS","Reliance Steel","美国最大金属服务中心"),
+        ("CMC","Commercial Metals","回收钢铁/建筑钢筋"),
+        ("X","美国钢铁","传统综合钢铁厂（被日铁收购中）"),
+        ("ATI","ATI","特种不锈钢/钛合金航空材料"),
+    ],
+    # ── 公用事业 ──
+    "水务": [
+        ("AWK","American Water","美国最大上市水务公司"),
+        ("CWT","California Water","加州水务公用事业"),
+        ("SJW","SJW Group","加州/德州水务"),
+        ("MSEX","Middlesex","新泽西/特拉华水务"),
+        ("YORW","York Water","美国最古老投资者持有水务公司"),
+        ("ARTNA","Artesian","特拉华水务/废水处理"),
+        ("GWRS","Global Water","亚利桑那/新墨西哥水务"),
+        ("CTWS","Connecticut Water","康涅狄格水务"),
+        ("WTRG","Essential Utilities","宾州/俄亥俄水务+天然气"),
+        ("XLU","公用事业ETF","代表整个公用事业板块（指数）"),
+    ],
 }
 
-# ── DB Init ─────────────────────────────────────────────────
+# ── China A-Share Sector ETFs ───────────────────────────────
+CN_SECTORS = [
+    # 科技
+    ("科技", "512480.SS", "半导体"),
+    ("科技", "515980.SS", "人工智能"), ("科技", "515050.SS", "5G通信"),
+    ("科技", "515880.SS", "通信服务"), ("科技", "515230.SS", "软件"),
+    ("科技", "516010.SS", "游戏"), ("科技", "515260.SS", "消费电子"),
+    # 金融
+    ("金融", "512000.SS", "券商"), ("金融", "512800.SS", "银行"),
+    ("金融", "516100.SS", "金融科技"),
+    # 消费
+    ("消费", "512690.SS", "白酒"), ("消费", "515710.SS", "食品饮料"),
+    ("消费", "159928.SZ", "大消费"), ("消费", "159996.SZ", "家电"),
+    ("消费", "159766.SZ", "旅游酒店"), ("消费", "512980.SS", "传媒"),
+    # 医疗
+    ("医疗", "512170.SS", "医疗服务"), ("医疗", "512290.SS", "生物医药"),
+    ("医疗", "159992.SZ", "创新药"), ("医疗", "159898.SZ", "医疗器械"),
+    ("医疗", "159647.SZ", "中药"),
+    # 新能源/材料
+    ("新能源材料", "515790.SS", "光伏"), ("新能源材料", "515030.SS", "新能源车"),
+    ("新能源材料", "515700.SS", "动力电池"), ("新能源材料", "512400.SS", "有色金属"),
+    ("新能源材料", "516150.SS", "稀土"), ("新能源材料", "515210.SS", "钢铁"),
+    ("新能源材料", "515220.SS", "煤炭"), ("新能源材料", "516020.SS", "化工"),
+    # 工业/制造
+    ("工业制造", "512660.SS", "军工"), ("工业制造", "516320.SS", "高端制造"),
+    ("工业制造", "516960.SS", "机械设备"), ("工业制造", "516950.SS", "基建"),
+    ("工业制造", "516910.SS", "物流"),
+    # 房地产
+    ("房地产", "512200.SS", "房地产"),
+    # 公用事业
+    ("公用事业", "159611.SZ", "电力"), ("公用事业", "512580.SS", "环保"),
+    # 指数
+    ("指数", "510050.SS", "上证50"), ("指数", "510300.SS", "沪深300"),
+    ("指数", "510500.SS", "中证500"), ("指数", "159915.SZ", "创业板"),
+    ("指数", "588000.SS", "科创板50"), ("指数", "512100.SS", "中证1000"),
+    ("指数", "510880.SS", "红利"), ("指数", "518880.SS", "黄金"),
+    # 跨境
+    ("跨境", "513100.SS", "纳指"), ("跨境", "513050.SS", "中概互联"),
+    ("跨境", "159892.SZ", "恒生科技"), ("跨境", "513520.SS", "日经"),
+]
+
+CN_SECTOR_STOCKS = {
+    "半导体": [
+        ("688981.SS","中芯国际","中国大陆最大晶圆代工厂"),
+        ("603501.SS","韦尔股份","CMOS图像传感器全球前三"),
+        ("603986.SS","兆易创新","NOR Flash+MCU存储芯片龙头"),
+        ("002371.SZ","北方华创","半导体设备平台型龙头"),
+        ("600703.SS","三安光电","LED+化合物半导体龙头"),
+        ("600584.SS","长电科技","全球第三大封测厂"),
+        ("002049.SZ","紫光国微","特种集成电路+安全芯片"),
+        ("300661.SZ","圣邦股份","模拟芯片设计龙头"),
+        ("300782.SZ","卓胜微","射频前端芯片龙头"),
+        ("600745.SS","闻泰科技","ODM+功率半导体双龙头"),
+    ],
+    "人工智能": [
+        ("002230.SZ","科大讯飞","国内语音识别AI龙头"),
+        ("603019.SS","中科曙光","国产服务器/超算龙头"),
+        ("000938.SZ","浪潮信息","AI服务器出货量国内第一"),
+        ("688787.SS","海天瑞声","AI训练数据服务"),
+        ("300308.SZ","中际旭创","800G光模块全球龙头"),
+        ("300502.SZ","新易盛","光模块核心供应商"),
+        ("603496.SS","恒为科技","网络可视化+算力可视化"),
+        ("300418.SZ","昆仑万维","大模型+海外互联网"),
+        ("688561.SS","奇安信","网络安全龙头"),
+        ("300033.SZ","同花顺","金融AI+数据服务"),
+    ],
+    "5G通信": [
+        ("600498.SS","烽火通信","光通信设备龙头"),
+        ("000063.SZ","中兴通讯","5G通信设备双寡头之一"),
+        ("300502.SZ","新易盛","光模块核心供应商"),
+        ("300308.SZ","中际旭创","800G光模块全球龙头"),
+        ("002281.SZ","光迅科技","光器件/光模块龙头"),
+        ("600487.SS","亨通光电","光纤光缆龙头"),
+        ("300394.SZ","天孚通信","光器件细分领域龙头"),
+        ("603236.SS","移远通信","物联网模组全球龙头"),
+        ("002402.SZ","和而泰","智能控制器龙头"),
+        ("600522.SS","中天科技","海缆+光纤光缆"),
+    ],
+    "通信服务": [
+        ("000063.SZ","中兴通讯","通信设备全球第四"),
+        ("600941.SS","中国移动","全球最大运营商"),
+        ("600050.SS","中国联通","国内三大运营商之一"),
+        ("601728.SS","中国电信","国内三大运营商之一"),
+        ("300628.SZ","亿联网络","SIP话机全球第一"),
+        ("603236.SS","移远通信","物联网模组全球龙头"),
+        ("300502.SZ","新易盛","光模块核心供应商"),
+        ("300308.SZ","中际旭创","800G光模块全球龙头"),
+        ("600498.SS","烽火通信","光通信设备龙头"),
+        ("300394.SZ","天孚通信","光器件细分领域龙头"),
+    ],
+    "软件": [
+        ("600536.SS","中国软件","国产操作系统核心"),
+        ("002153.SZ","石基信息","酒店/餐饮SaaS龙头"),
+        ("300033.SZ","同花顺","金融信息服务商龙头"),
+        ("002230.SZ","科大讯飞","语音识别AI龙头"),
+        ("600845.SS","宝信软件","钢铁信息化+IDC"),
+        ("300496.SZ","中科创达","智能操作系统龙头"),
+        ("688111.SS","金山办公","WPS办公软件龙头"),
+        ("600588.SS","用友网络","企业管理软件龙头"),
+        ("002912.SZ","中新赛克","网络可视化"),
+        ("300229.SZ","拓尔思","NLP自然语言处理"),
+    ],
+    "游戏": [
+        ("002602.SZ","世纪华通","游戏出海+IDC"),
+        ("002555.SZ","三七互娱","手游研运一体化龙头"),
+        ("603444.SS","吉比特","精品游戏研运"),
+        ("300418.SZ","昆仑万维","大模型+海外游戏"),
+        ("002624.SZ","完美世界","端游/手游/影视"),
+        ("300031.SZ","宝通科技","游戏+工业互联网"),
+        ("300052.SZ","中青宝","云游戏概念"),
+        ("002174.SZ","游族网络","卡牌游戏研运"),
+        ("300459.SZ","汤姆猫","休闲游戏出海"),
+        ("002517.SZ","恺英网络","传奇类游戏研运"),
+    ],
+    "消费电子": [
+        ("002475.SZ","立讯精密","消费电子精密制造龙头"),
+        ("601138.SS","工业富联","全球电子制造服务龙头"),
+        ("000725.SZ","京东方A","全球面板龙头"),
+        ("002384.SZ","东山精密","PCB+精密结构件"),
+        ("002241.SZ","歌尔股份","VR/AR设备代工龙头"),
+        ("300433.SZ","蓝思科技","消费电子玻璃盖板龙头"),
+        ("603501.SS","韦尔股份","CMOS图像传感器全球前三"),
+        ("600745.SS","闻泰科技","ODM+功率半导体"),
+        ("000100.SZ","TCL科技","面板+半导体显示"),
+        ("002273.SZ","水晶光电","光学光电子龙头"),
+    ],
+    # ── 金融 ──
+    "券商": [
+        ("600030.SS","中信证券","国内券商龙头"),
+        ("300059.SZ","东方财富","互联网券商+基金销售"),
+        ("600837.SS","海通证券","头部综合券商"),
+        ("601688.SS","华泰证券","科技驱动型券商"),
+        ("600999.SS","招商证券","央企背景头部券商"),
+        ("000776.SZ","广发证券","投行/资管实力强"),
+        ("601211.SS","国泰君安","老牌头部券商"),
+        ("600958.SS","东方证券","资管特色券商"),
+        ("601377.SS","兴业证券","福建区域龙头券商"),
+        ("002736.SZ","国信证券","深圳国资背景券商"),
+    ],
+    "银行": [
+        ("600036.SS","招商银行","零售银行之王"),
+        ("601398.SS","工商银行","全球最大银行"),
+        ("601288.SS","农业银行","县域金融龙头"),
+        ("601939.SS","建设银行","基建金融特色"),
+        ("601988.SS","中国银行","全球化程度最高"),
+        ("600016.SS","民生银行","民营资本银行"),
+        ("601166.SS","兴业银行","同业业务起家"),
+        ("600000.SS","浦发银行","上海国资背景"),
+        ("601998.SS","中信银行","对公/投行特色"),
+        ("601818.SS","光大银行","光大集团背景"),
+    ],
+    "金融科技": [
+        ("300059.SZ","东方财富","互联网券商+基金销售龙头"),
+        ("300033.SZ","同花顺","金融信息服务商龙头"),
+        ("600570.SS","恒生电子","金融IT系统龙头"),
+        ("000948.SZ","南天信息","银行IT解决方案"),
+        ("300348.SZ","长亮科技","银行核心系统"),
+        ("300339.SZ","润和软件","金融科技+开源鸿蒙"),
+        ("300377.SZ","赢时胜","资管IT系统"),
+        ("300380.SZ","安硕信息","信贷管理系统"),
+        ("300674.SZ","宇信科技","银行IT解决方案"),
+        ("600536.SS","中国软件","国产操作系统核心"),
+    ],
+    # ── 消费 ──
+    "白酒": [
+        ("600519.SS","贵州茅台","白酒绝对龙头"),
+        ("000858.SZ","五粮液","浓香型白酒龙头"),
+        ("000568.SZ","泸州老窖","高端白酒三强"),
+        ("600809.SS","山西汾酒","清香型白酒龙头"),
+        ("002304.SZ","洋河股份","苏酒龙头"),
+        ("000596.SZ","古井贡酒","徽酒龙头"),
+        ("600702.SS","舍得酒业","次高端白酒"),
+        ("603369.SS","今世缘","江苏区域名酒"),
+        ("600779.SS","水井坊","外资控股高端白酒"),
+        ("000860.SZ","顺鑫农业","牛栏山二锅头"),
+    ],
+    "食品饮料": [
+        ("603288.SS","海天味业","调味品龙头"),
+        ("600887.SS","伊利股份","乳制品龙头"),
+        ("002714.SZ","牧原股份","生猪养殖龙头"),
+        ("300498.SZ","温氏股份","黄鸡+生猪养殖"),
+        ("600298.SS","安琪酵母","酵母全球第二"),
+        ("002507.SZ","涪陵榨菜","榨菜细分龙头"),
+        ("603517.SS","绝味食品","休闲卤味龙头"),
+        ("600872.SS","中炬高新","酱油第二梯队"),
+        ("300999.SZ","金龙鱼","粮油龙头"),
+        ("002557.SZ","洽洽食品","瓜子坚果龙头"),
+    ],
+    "大消费": [
+        ("600519.SS","贵州茅台","白酒绝对龙头"),
+        ("000858.SZ","五粮液","浓香型白酒龙头"),
+        ("600887.SS","伊利股份","乳制品龙头"),
+        ("603288.SS","海天味业","调味品龙头"),
+        ("000333.SZ","美的集团","家电综合龙头"),
+        ("000651.SZ","格力电器","空调龙头"),
+        ("002714.SZ","牧原股份","生猪养殖龙头"),
+        ("600690.SS","海尔智家","全球化家电龙头"),
+        ("002568.SZ","百润股份","预调鸡尾酒龙头"),
+        ("603195.SS","公牛集团","民用电工龙头"),
+    ],
+    "家电": [
+        ("000333.SZ","美的集团","家电综合龙头"),
+        ("000651.SZ","格力电器","空调龙头"),
+        ("600690.SS","海尔智家","全球化家电龙头"),
+        ("002032.SZ","苏泊尔","小家电龙头"),
+        ("603486.SS","科沃斯","扫地机器人龙头"),
+        ("688169.SS","石头科技","扫地机器人出海"),
+        ("002242.SZ","九阳股份","豆浆机/小家电"),
+        ("002508.SZ","老板电器","厨电龙头"),
+        ("603868.SS","飞科电器","个人护理电器"),
+        ("300911.SZ","亿田智能","集成灶"),
+    ],
+    "旅游酒店": [
+        ("600009.SS","上海机场","国际航空枢纽"),
+        ("601888.SS","中国中免","免税龙头"),
+        ("600754.SS","锦江酒店","国内酒店龙头"),
+        ("600258.SS","首旅酒店","酒店第二梯队"),
+        ("002707.SZ","众信旅游","出境游龙头"),
+        ("000524.SZ","岭南控股","旅行社+酒店"),
+        ("600138.SS","中青旅","旅行社+景区"),
+        ("002033.SZ","丽江股份","丽江景区运营"),
+        ("600054.SS","黄山旅游","黄山景区运营"),
+        ("002159.SZ","三特索道","索道运营"),
+    ],
+    "传媒": [
+        ("002027.SZ","分众传媒","楼宇媒体龙头"),
+        ("300413.SZ","芒果超媒","长视频平台"),
+        ("601928.SS","凤凰传媒","出版发行龙头"),
+        ("600373.SS","中文传媒","出版+游戏"),
+        ("601098.SS","中南传媒","教育出版龙头"),
+        ("601801.SS","皖新传媒","安徽出版发行"),
+        ("300133.SZ","华策影视","电视剧制作龙头"),
+        ("600088.SS","中视传媒","央视背景传媒"),
+        ("601949.SS","中国出版","国家级出版"),
+        ("603533.SS","掌阅科技","数字阅读平台"),
+    ],
+    # ── 医疗 ──
+    "医疗服务": [
+        ("300760.SZ","迈瑞医疗","医疗器械龙头"),
+        ("603259.SS","药明康德","CXO全球龙头"),
+        ("600276.SS","恒瑞医药","创新药龙头"),
+        ("300015.SZ","爱尔眼科","眼科连锁龙头"),
+        ("300896.SZ","爱美客","医美注射剂龙头"),
+        ("002001.SZ","新和成","原料药/维生素龙头"),
+        ("600436.SS","片仔癀","中药稀缺品种"),
+        ("000538.SZ","云南白药","中药品牌龙头"),
+        ("600196.SS","复星医药","综合医药集团"),
+        ("300003.SZ","乐普医疗","心血管器械"),
+    ],
+    "生物医药": [
+        ("603259.SS","药明康德","CXO全球龙头"),
+        ("600276.SS","恒瑞医药","创新药龙头"),
+        ("000661.SZ","长春高新","生长激素龙头"),
+        ("300122.SZ","智飞生物","疫苗代理+自研"),
+        ("300142.SZ","沃森生物","mRNA疫苗"),
+        ("688185.SS","康希诺","疫苗研发"),
+        ("300601.SZ","康泰生物","疫苗平台型"),
+        ("603392.SS","万泰生物","HPV疫苗"),
+        ("688520.SS","神州细胞","生物药研发"),
+        ("300841.SZ","康华生物","狂犬病疫苗"),
+    ],
+    "创新药": [
+        ("600276.SS","恒瑞医药","创新药龙头"),
+        ("688235.SS","百济神州","全球化创新药"),
+        ("688266.SS","泽璟制药","小分子创新药"),
+        ("688302.SS","海创药业","创新药研发"),
+        ("688176.SS","亚虹医药","泌尿生殖系统创新药"),
+        ("688197.SS","首药控股","小分子创新药"),
+        ("688578.SS","艾力斯","肺癌靶向药"),
+        ("688331.SS","荣昌生物","ADC药物"),
+        ("688062.SS","迈威生物","生物创新药"),
+        ("688443.SS","智翔金泰","抗体药物"),
+    ],
+    "医疗器械": [
+        ("300760.SZ","迈瑞医疗","医疗器械龙头"),
+        ("688271.SS","联影医疗","医学影像设备"),
+        ("300003.SZ","乐普医疗","心血管器械"),
+        ("688016.SS","心脉医疗","血管介入器械"),
+        ("688198.SS","佰仁医疗","动物源性植介入"),
+        ("300326.SZ","凯利泰","骨科微创器械"),
+        ("300453.SZ","三鑫医疗","血液净化器械"),
+        ("688289.SS","圣湘生物","分子诊断"),
+        ("300482.SZ","万孚生物","POCT快速诊断"),
+        ("688575.SS","亚辉龙","化学发光诊断"),
+    ],
+    "中药": [
+        ("600436.SS","片仔癀","中药稀缺品种"),
+        ("000538.SZ","云南白药","中药品牌龙头"),
+        ("600085.SS","同仁堂","中药老字号"),
+        ("000999.SZ","华润三九","中药OTC龙头"),
+        ("600332.SS","白云山","南派中药"),
+        ("600535.SS","天士力","现代中药"),
+        ("600976.SS","健民集团","儿科中药"),
+        ("603896.SS","寿仙谷","灵芝孢子粉"),
+        ("300181.SZ","佐力药业","乌灵胶囊"),
+        ("600771.SS","广誉远","中药老字号"),
+    ],
+    # ── 新能源/材料 ──
+    "光伏": [
+        ("601012.SS","隆基绿能","单晶硅片龙头"),
+        ("600438.SS","通威股份","硅料+电池片龙头"),
+        ("002459.SZ","晶澳科技","一体化光伏组件"),
+        ("688599.SS","天合光能","光伏组件龙头"),
+        ("601865.SS","福莱特","光伏玻璃龙头"),
+        ("603806.SS","福斯特","光伏胶膜龙头"),
+        ("300274.SZ","阳光电源","光伏逆变器龙头"),
+        ("688223.SS","晶科能源","N型组件龙头"),
+        ("002129.SZ","TCL中环","硅片双寡头"),
+        ("600732.SS","爱旭股份","ABC电池"),
+    ],
+    "新能源车": [
+        ("002594.SZ","比亚迪","新能源汽车全球龙头"),
+        ("300750.SZ","宁德时代","动力电池全球龙头"),
+        ("601127.SS","赛力斯","华为智选车"),
+        ("002050.SZ","三花智控","热管理龙头"),
+        ("002709.SZ","天赐材料","电解液龙头"),
+        ("603659.SS","璞泰来","负极材料+隔膜"),
+        ("300014.SZ","亿纬锂能","锂原电池+动力电池"),
+        ("688005.SS","容百科技","三元正极材料"),
+        ("002812.SZ","恩捷股份","锂电池隔膜龙头"),
+        ("603993.SS","洛阳钼业","钴镍资源"),
+    ],
+    "动力电池": [
+        ("300750.SZ","宁德时代","动力电池全球龙头"),
+        ("300014.SZ","亿纬锂能","锂原电池+动力电池"),
+        ("002709.SZ","天赐材料","电解液龙头"),
+        ("002812.SZ","恩捷股份","锂电池隔膜龙头"),
+        ("603659.SS","璞泰来","负极材料+隔膜"),
+        ("688005.SS","容百科技","三元正极材料"),
+        ("300073.SZ","当升科技","正极材料"),
+        ("002074.SZ","国轩高科","动力电池第二梯队"),
+        ("300919.SZ","中伟股份","三元前驱体"),
+        ("688567.SS","孚能科技","软包动力电池"),
+    ],
+    "有色金属": [
+        ("601899.SS","紫金矿业","金铜锌综合矿业龙头"),
+        ("603993.SS","洛阳钼业","铜钴钼综合矿业"),
+        ("600362.SS","江西铜业","国内铜业龙头"),
+        ("000878.SZ","云南铜业","铜冶炼"),
+        ("600547.SS","山东黄金","黄金矿业龙头"),
+        ("600489.SS","中金黄金","央企黄金龙头"),
+        ("601600.SS","中国铝业","铝业龙头"),
+        ("002460.SZ","赣锋锂业","锂盐龙头"),
+        ("002466.SZ","天齐锂业","锂矿资源龙头"),
+        ("603799.SS","华友钴业","钴镍新能源材料"),
+    ],
+    "稀土": [
+        ("600111.SS","北方稀土","轻稀土龙头"),
+        ("600259.SS","广晟有色","中重稀土"),
+        ("600392.SS","盛和资源","稀土冶炼分离"),
+        ("000831.SZ","中国稀土","中重稀土整合平台"),
+        ("600549.SS","厦门钨业","钨+稀土"),
+        ("600010.SS","包钢股份","稀土精矿"),
+        ("000612.SZ","焦作万方","电解铝+稀土"),
+        ("600366.SS","宁波韵升","稀土永磁材料"),
+        ("300748.SZ","金力永磁","高性能钕铁硼"),
+        ("688077.SS","大地熊","烧结钕铁硼"),
+    ],
+    "钢铁": [
+        ("600019.SS","宝钢股份","国内钢铁龙头"),
+        ("000932.SZ","华菱钢铁","湖南钢铁龙头"),
+        ("600808.SS","马钢股份","安徽钢铁"),
+        ("000709.SZ","河钢股份","河北钢铁"),
+        ("600022.SS","山东钢铁","山东钢铁整合"),
+        ("600282.SS","南钢股份","特钢+板材"),
+        ("000898.SZ","鞍钢股份","东北钢铁龙头"),
+        ("600010.SS","包钢股份","稀土+钢铁"),
+        ("601003.SS","柳钢股份","广西钢铁"),
+        ("600507.SS","方大特钢","弹簧扁钢"),
+    ],
+    "煤炭": [
+        ("601088.SS","中国神华","煤炭+电力一体化龙头"),
+        ("601225.SS","陕西煤业","优质动力煤"),
+        ("600188.SS","兖矿能源","国际化煤企"),
+        ("601699.SS","潞安环能","喷吹煤龙头"),
+        ("600123.SS","兰花科创","无烟煤"),
+        ("600395.SS","盘江股份","西南煤炭"),
+        ("000552.SZ","甘肃能化","甘肃煤炭"),
+        ("600971.SS","恒源煤电","安徽煤炭"),
+        ("601015.SS","陕西黑猫","焦化"),
+        ("600408.SS","红阳能源","辽宁煤炭"),
+    ],
+    "化工": [
+        ("600309.SS","万华化学","MDI全球龙头"),
+        ("002648.SZ","卫星化学","C2/C3轻烃化工"),
+        ("600426.SS","华鲁恒升","煤化工龙头"),
+        ("002493.SZ","荣盛石化","民营炼化龙头"),
+        ("000703.SZ","恒逸石化","PTA-聚酯龙头"),
+        ("600346.SS","恒力石化","炼化+新材料"),
+        ("601233.SS","桐昆股份","涤纶长丝龙头"),
+        ("603225.SS","新凤鸣","涤纶长丝"),
+        ("002001.SZ","新和成","维生素/香精香料"),
+        ("600486.SS","扬农化工","农药原药龙头"),
+    ],
+    # ── 工业制造 ──
+    "军工": [
+        ("600893.SS","航发动力","航空发动机龙头"),
+        ("600760.SS","中航沈飞","战斗机整机"),
+        ("000768.SZ","中航西飞","大中型运输机"),
+        ("600372.SS","中航机载","航空机载系统"),
+        ("600391.SS","航发科技","航空发动机零部件"),
+        ("600879.SS","航天电子","航天电子配套"),
+        ("002179.SZ","中航光电","军用连接器龙头"),
+        ("300114.SZ","中航电测","军工传感器"),
+        ("600435.SS","北方导航","导航控制"),
+        ("000519.SZ","中兵红箭","智能弹药+培育钻石"),
+    ],
+    "高端制造": [
+        ("601766.SS","中国中车","轨道交通装备全球龙头"),
+        ("600031.SS","三一重工","工程机械龙头"),
+        ("000425.SZ","徐工机械","工程机械第二"),
+        ("601100.SS","恒立液压","液压件龙头"),
+        ("300124.SZ","汇川技术","工业自动化龙头"),
+        ("002008.SZ","大族激光","激光加工设备"),
+        ("688017.SS","绿的谐波","谐波减速器"),
+        ("688305.SS","科德数控","五轴联动数控机床"),
+        ("300607.SZ","拓斯达","工业机器人"),
+        ("688698.SS","伟创电气","变频器/伺服系统"),
+    ],
+    "机械设备": [
+        ("600031.SS","三一重工","工程机械龙头"),
+        ("000425.SZ","徐工机械","工程机械第二"),
+        ("000157.SZ","中联重科","工程机械第三"),
+        ("601100.SS","恒立液压","液压件龙头"),
+        ("603338.SS","浙江鼎力","高空作业平台"),
+        ("600761.SS","安徽合力","叉车龙头"),
+        ("603298.SS","杭叉集团","叉车第二"),
+        ("600835.SS","上海机电","电梯龙头"),
+        ("002367.SZ","康力电梯","民族电梯品牌"),
+        ("300091.SZ","金通灵","流体机械"),
+    ],
+    "基建": [
+        ("601668.SS","中国建筑","全球最大建筑公司"),
+        ("601390.SS","中国中铁","铁路基建龙头"),
+        ("601186.SS","中国铁建","铁路基建第二"),
+        ("601800.SS","中国交建","港口/公路基建"),
+        ("601618.SS","中国中冶","冶金工程+资源开发"),
+        ("601669.SS","中国电建","水利水电龙头"),
+        ("601117.SS","中国化学","化工工程"),
+        ("600970.SS","中材国际","水泥工程全球第一"),
+        ("601868.SS","中国能建","能源电力建设"),
+        ("600820.SS","隧道股份","上海隧道工程"),
+    ],
+    "物流": [
+        ("002352.SZ","顺丰控股","快递龙头"),
+        ("600233.SS","圆通速递","快递第二"),
+        ("002120.SZ","韵达股份","快递第三"),
+        ("002468.SZ","申通快递","快递第四"),
+        ("603056.SS","德邦股份","大件快递"),
+        ("600057.SS","厦门象屿","供应链物流"),
+        ("600787.SS","中储股份","仓储物流"),
+        ("603128.SS","华贸物流","国际货代"),
+        ("002010.SZ","传化智联","公路港物流"),
+        ("600153.SS","建发股份","供应链+地产"),
+    ],
+    # ── 房地产 ──
+    "房地产": [
+        ("000002.SZ","万科A","房地产开发龙头"),
+        ("600048.SS","保利发展","央企地产龙头"),
+        ("001979.SZ","招商蛇口","园区开发+地产"),
+        ("600606.SS","绿地控股","综合性地产"),
+        ("600383.SS","金地集团","稳健型房企"),
+        ("601155.SS","新城控股","住宅+商业"),
+        ("000961.SZ","中南建设","建筑+地产"),
+        ("600340.SS","华夏幸福","产业新城"),
+        ("000656.SZ","金科股份","西南房企"),
+        ("600325.SS","华发股份","珠海国资地产"),
+    ],
+    # ── 公用事业 ──
+    "电力": [
+        ("600900.SS","长江电力","水电龙头"),
+        ("600011.SS","华能国际","火电龙头"),
+        ("600795.SS","国电电力","央企电力"),
+        ("601985.SS","中国核电","核电龙头"),
+        ("003816.SZ","中国广核","核电运营"),
+        ("600886.SS","国投电力","水电+火电"),
+        ("600674.SS","川投能源","雅砻江水电"),
+        ("600023.SS","浙能电力","浙江火电"),
+        ("600027.SS","华电国际","山东火电"),
+        ("601016.SS","节能风电","风电运营"),
+    ],
+    "环保": [
+        ("600323.SS","瀚蓝环境","固废处理龙头"),
+        ("601330.SS","绿色动力","垃圾焚烧发电"),
+        ("002034.SZ","旺能环境","垃圾焚烧"),
+        ("603588.SS","高能环境","危废处理"),
+        ("300070.SZ","碧水源","水处理膜技术"),
+        ("300266.SZ","兴源环境","水处理工程"),
+        ("300137.SZ","先河环保","环境监测"),
+        ("603568.SS","伟明环保","垃圾焚烧设备"),
+        ("002672.SZ","东江环保","危废处理"),
+        ("300422.SZ","博世科","水处理+土壤修复"),
+    ],
+}
 def init_db():
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute('''CREATE TABLE IF NOT EXISTS sector_data (
@@ -352,7 +1148,51 @@ def init_db():
             start_date TEXT, end_date TEXT, total_return REAL, sharpe REAL,
             max_drawdown REAL, win_rate REAL, trades INTEGER,
             params TEXT, created_at TEXT DEFAULT (datetime('now')))''')
+        # Add indexes for performance
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_sector_date ON sector_data(date)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_sector_sym ON sector_data(symbol)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_sector_cat ON sector_data(category)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_sector_date_sym ON sector_data(date, symbol)')
         conn.commit()
+
+def init_cn_db():
+    with sqlite3.connect(CN_DB_PATH) as conn:
+        conn.execute('''CREATE TABLE IF NOT EXISTS sector_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT, symbol TEXT, name TEXT,
+            category TEXT, open REAL, high REAL, low REAL, close REAL,
+            change_pct REAL, volume INTEGER, fetched_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(date, symbol))''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS daily_summary (
+            date TEXT PRIMARY KEY, total_sectors INTEGER, up_sectors INTEGER,
+            down_sectors INTEGER, best_sector TEXT, best_pct REAL,
+            worst_sector TEXT, worst_pct REAL, spy_change REAL)''')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_cn_sector_date ON sector_data(date)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_cn_sector_sym ON sector_data(symbol)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_cn_sector_cat ON sector_data(category)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_cn_sector_date_sym ON sector_data(date, symbol)')
+        # Auto-migration: if old data with 'ETF' suffix exists, clear it
+        try:
+            old = conn.execute("SELECT COUNT(*) FROM sector_data WHERE name LIKE '%ETF'").fetchone()[0]
+            if old > 0:
+                conn.execute("DELETE FROM sector_data")
+                conn.execute("DELETE FROM daily_summary")
+        except: pass
+        conn.commit()
+
+# ── Auto-seed A-share DB from bundled backup ─────────────────
+def auto_seed_cn_db():
+    backup_path = os.path.join(os.path.dirname(__file__), 'static', 'cn_sectors.db.bak')
+    if not os.path.exists(backup_path):
+        print("  ⚠️ CN DB backup not found at", backup_path)
+        return
+    try:
+        import shutil
+        shutil.copy(backup_path, CN_DB_PATH)
+        print(f"  ✅ Restored cn_sectors.db from backup ({os.path.getsize(backup_path)} bytes)")
+    except Exception as e:
+        print(f"  ⚠️ CN DB restore error: {e}")
+
+auto_seed_cn_db()
 
 # ── Security Middleware ──────────────────────────────────────
 @app.before_request
@@ -453,13 +1293,107 @@ def save_to_db(data, target_date):
              spy['change_pct'] if spy else None))
         conn.commit()
 
+# ── China A-Share Data Fetching ──────────────────────────────
+def fetch_cn_sector_data(target_date=None):
+    """Fetch A-share ETF data from Yahoo Finance."""
+    results = []
+    for category, symbol, name in CN_SECTORS:
+        try:
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
+            resp = requests.get(url, headers=YF_HEADERS, timeout=15)
+            if resp.status_code != 200: continue
+            data = resp.json()
+            result = data.get('chart', {}).get('result', [None])[0]
+            if not result: continue
+            timestamps = result.get('timestamp', [])
+            quotes = result.get('indicators', {}).get('quote', [{}])[0]
+            if len(timestamps) < 2: continue
+            # Get last two trading days
+            close = quotes.get('close', [])
+            open_p = quotes.get('open', [])
+            high = quotes.get('high', [])
+            low = quotes.get('low', [])
+            volume = quotes.get('volume', [])
+            if len(close) < 2 or close[-1] is None or close[-2] is None: continue
+            latest_close = close[-1]
+            prev_close = close[-2]
+            change_pct = ((latest_close - prev_close) / prev_close) * 100 if prev_close else 0
+            results.append({
+                'symbol': symbol, 'name': name, 'category': category,
+                'open': round(open_p[-1] or 0, 2), 'high': round(high[-1] or 0, 2),
+                'low': round(low[-1] or 0, 2), 'close': round(latest_close, 2),
+                'change_pct': round(change_pct, 2), 'volume': int(volume[-1] or 0),
+            })
+            time.sleep(0.15)
+        except Exception as e:
+            app.logger.warning(f"CN Fetch fail {symbol}: {e}")
+    return results
+
+def fetch_cn_stock_quotes(stock_list):
+    """Fetch A-share stock quotes from Yahoo Finance."""
+    results = []
+    for item in stock_list:
+        sym, name, desc = item[0], item[1] if len(item)>1 else sym, item[2] if len(item)>2 else ""
+        try:
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
+            resp = requests.get(url, headers=YF_HEADERS, timeout=10)
+            if resp.status_code != 200: continue
+            data = resp.json()
+            result = data.get('chart', {}).get('result', [None])[0]
+            if not result: continue
+            quotes = result.get('indicators', {}).get('quote', [{}])[0]
+            close = quotes.get('close', [])
+            volume = quotes.get('volume', [])
+            if len(close) < 2 or close[-1] is None or close[-2] is None: continue
+            change_pct = ((close[-1] - close[-2]) / close[-2]) * 100 if close[-2] else 0
+            results.append({
+                'symbol': sym, 'name': name, 'desc': desc,
+                'close': round(close[-1], 2), 'change_pct': round(change_pct, 2),
+                'volume': int(volume[-1] or 0),
+            })
+            time.sleep(0.1)
+        except: pass
+    return sorted(results, key=lambda x: x['change_pct'], reverse=True)
+
+def save_cn_to_db(data, target_date):
+    with sqlite3.connect(CN_DB_PATH) as conn:
+        for row in data:
+            conn.execute('''INSERT OR REPLACE INTO sector_data
+                (date, symbol, name, category, open, high, low, close, change_pct, volume)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                (target_date, row['symbol'], row['name'], row['category'],
+                 row['open'], row['high'], row['low'], row['close'],
+                 row['change_pct'], row['volume']))
+        sectors_only = [r for r in data if r['category'] != '指数']
+        up = sum(1 for r in sectors_only if r['change_pct'] > 0)
+        down = sum(1 for r in sectors_only if r['change_pct'] < 0)
+        best = max(sectors_only, key=lambda r: r['change_pct']) if sectors_only else None
+        worst = min(sectors_only, key=lambda r: r['change_pct']) if sectors_only else None
+        spy = next((r for r in data if r['symbol'] == '510300.SS'), None)  # 沪深300 as benchmark
+        conn.execute('''INSERT OR REPLACE INTO daily_summary VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (target_date, len(sectors_only), up, down,
+             best['name'] if best else None, best['change_pct'] if best else None,
+             worst['name'] if worst else None, worst['change_pct'] if worst else None,
+             spy['change_pct'] if spy else None))
+        conn.commit()
+
 def daily_fetch_job():
     y = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
     data = fetch_sector_data(y)
     if data: save_to_db(data, y)
 
-scheduler = BackgroundScheduler()
-scheduler.add_job(daily_fetch_job, 'cron', hour=7, minute=0)
+def cn_daily_fetch_job():
+    y = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    data = fetch_cn_sector_data(y)
+    if data: save_cn_to_db(data, y)
+
+scheduler = BackgroundScheduler(timezone='Asia/Shanghai')
+# 美股: 每天早上4点、5点更新（北京时间）
+scheduler.add_job(daily_fetch_job, 'cron', hour=4, minute=0)
+scheduler.add_job(daily_fetch_job, 'cron', hour=5, minute=0)
+# A股: 每天下午14:30、15:30更新（北京时间）
+scheduler.add_job(cn_daily_fetch_job, 'cron', hour=14, minute=30)
+scheduler.add_job(cn_daily_fetch_job, 'cron', hour=15, minute=30)
 scheduler.start()
 
 # ── Quant Backtest Engine ────────────────────────────────────
@@ -567,6 +1501,12 @@ def run_backtest(prices, strategy, params):
         'win_rate': round(wins / len(trades) * 100, 1) if len(trades) > 1 else 0,
         'trades': len(trades),
         'buy_hold_return': round((prices[-1] - prices[0]) / prices[0] * 100, 2),
+        'equity_curve': [round(v, 4) for v in cum_rets],
+        'signals': signals,
+        'trade_list': [
+            {'index': t[0], 'signal': t[1], 'price': round(prices[t[0]], 2)}
+            for t in trades
+        ],
     }
 
 # ── Routes ───────────────────────────────────────────────────
@@ -577,12 +1517,15 @@ def index():
 @app.route('/api/latest')
 def api_latest():
     target_date = request.args.get('date', '')
+    auto_refresh = not target_date
     if not target_date:
-        target_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        with sqlite3.connect(DB_PATH) as conn:
+            latest_date = conn.execute("SELECT MAX(date) FROM sector_data").fetchone()[0]
+        target_date = latest_date or (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT * FROM sector_data WHERE date = ? ORDER BY change_pct DESC", (target_date,)
+            "SELECT symbol, name, category, close, change_pct, volume, fetched_at FROM sector_data WHERE date = ? ORDER BY change_pct DESC", (target_date,)
         ).fetchall()
         summary = conn.execute(
             "SELECT * FROM daily_summary WHERE date = ?", (target_date,)
@@ -591,13 +1534,42 @@ def api_latest():
         data = fetch_sector_data(target_date)
         if data:
             save_to_db(data, target_date)
-            return jsonify({"date": target_date, "sectors": data, "fetched": "live"})
+            return jsonify({"date": target_date, "sectors": data, "fetched": "live", "updated_at": datetime.now().strftime('%m-%d %H:%M'), "next_update": _next_update_time('us')})
         return jsonify({"error": "no data", "date": target_date})
+    # Auto-refresh stale data when requesting latest
+    if auto_refresh and rows:
+        try:
+            latest_fetched = rows[0]['fetched_at']
+            if latest_fetched:
+                fetched_dt = datetime.strptime(latest_fetched, '%Y-%m-%d %H:%M:%S')
+                if (datetime.now() - fetched_dt).total_seconds() > 6 * 3600:
+                    data = fetch_sector_data(target_date)
+                    if data:
+                        save_to_db(data, target_date)
+                        with sqlite3.connect(DB_PATH) as conn:
+                            conn.row_factory = sqlite3.Row
+                            rows = conn.execute(
+                                "SELECT symbol, name, category, close, change_pct, volume, fetched_at FROM sector_data WHERE date = ? ORDER BY change_pct DESC", (target_date,)
+                            ).fetchall()
+                            summary = conn.execute("SELECT * FROM daily_summary WHERE date = ?", (target_date,)).fetchone()
+                        return jsonify({
+                            "date": target_date,
+                            "sectors": [dict(r) for r in rows],
+                            "summary": dict(summary) if summary else None,
+                            "fetched": "live",
+                            "updated_at": datetime.now().strftime('%m-%d %H:%M'),
+                            "next_update": _next_update_time('us')
+                        })
+        except Exception as e:
+            app.logger.warning(f"Auto-refresh failed: {e}")
+    updated_at = max(r['fetched_at'] for r in rows)[:16].replace('T', ' ') if rows else '-'
     return jsonify({
         "date": target_date,
         "sectors": [dict(r) for r in rows],
         "summary": dict(summary) if summary else None,
-        "fetched": "cached"
+        "fetched": "cached",
+        "updated_at": updated_at,
+        "next_update": _next_update_time('us')
     })
 
 @app.route('/api/dates')
@@ -608,6 +1580,57 @@ def api_dates():
             "SELECT DISTINCT date FROM sector_data ORDER BY date DESC"
         ).fetchall()
     return jsonify([d[0] for d in dates])
+
+@app.route('/api/backfill', methods=['POST'])
+def api_backfill():
+    """Backfill 1 year of historical data for all symbols."""
+    symbols = list(set(s[1] for s in SUB_SECTORS))
+    total_rows = 0
+    for sym in symbols:
+        try:
+            url = f"https://api.stockanalysis.com/api/symbol/s/{sym}/history?range=1y"
+            resp = requests.get(url, headers=SA_HEADERS, timeout=20)
+            if resp.status_code != 200: continue
+            data = resp.json()
+            if 'data' not in data or not data['data']: continue
+            items = data['data']
+            name = category = None
+            for cat, s, n in SUB_SECTORS:
+                if s == sym: name = n; category = cat; break
+            with sqlite3.connect(DB_PATH) as conn:
+                for j in range(len(items) - 1):
+                    latest = items[j]; prev = items[j + 1]
+                    date = latest.get('t', '')
+                    if not date or date < '2026-01-01': continue
+                    close = latest.get('c', 0); prev_close = prev.get('c', 0)
+                    change_pct = ((close - prev_close) / prev_close) * 100 if prev_close else 0
+                    conn.execute('''INSERT OR IGNORE INTO sector_data
+                        (date, symbol, name, category, open, high, low, close, change_pct, volume)
+                        VALUES (?,?,?,?,?,?,?,?,?,?)''',
+                        (date, sym, name, category, round(latest.get('o',0),2),
+                         round(latest.get('h',0),2), round(latest.get('l',0),2),
+                         round(close,2), round(change_pct,2), int(latest.get('v',0))))
+                conn.commit()
+            total_rows += 1
+            time.sleep(0.1)
+        except Exception as e:
+            app.logger.warning(f"Backfill fail {sym}: {e}")
+    # Generate summaries
+    with sqlite3.connect(DB_PATH) as conn:
+        dates = [r[0] for r in conn.execute("SELECT DISTINCT date FROM sector_data").fetchall()]
+        for date in dates:
+            rows = conn.execute("SELECT * FROM sector_data WHERE date=?", (date,)).fetchall()
+            if not rows: continue
+            sects = [r for r in rows if r[3] != '指数']
+            up = sum(1 for r in sects if r[8] > 0); down = sum(1 for r in sects if r[8] < 0)
+            best = max(sects, key=lambda r: r[8]) if sects else None
+            worst = min(sects, key=lambda r: r[8]) if sects else None
+            spy = next((r for r in rows if r[1]=='SPY'), None)
+            conn.execute('''INSERT OR IGNORE INTO daily_summary VALUES (?,?,?,?,?,?,?,?,?)''',
+                (date, len(sects), up, down, best[2] if best else None, best[8] if best else None,
+                 worst[2] if worst else None, worst[8] if worst else None, spy[8] if spy else None))
+        conn.commit()
+    return jsonify({"status": "ok", "symbols": total_rows})
 
 @app.route('/api/sector/<sector_name>')
 def api_sector_detail(sector_name):
@@ -728,6 +1751,333 @@ def api_health():
         count = conn.execute("SELECT COUNT(*) FROM sector_data").fetchone()[0]
     return jsonify({"status": "healthy", "records": count, "time": datetime.now().isoformat()})
 
+@app.route('/api/rotation')
+def api_rotation():
+    """Return sector performance across 1d/5d/20d/60d for heatmap."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        dates = [r[0] for r in conn.execute(
+            "SELECT DISTINCT date FROM sector_data ORDER BY date DESC LIMIT 70"
+        ).fetchall()]
+        if len(dates) < 5:
+            return jsonify({"error": "insufficient data"})
+        d1, d5, d20, d60 = dates[0], dates[4] if len(dates) > 4 else dates[-1], dates[19] if len(dates) > 19 else dates[-1], dates[59] if len(dates) > 59 else dates[-1]
+        rows = conn.execute(
+            "SELECT date, name, category, close, change_pct FROM sector_data WHERE date IN (?,?,?,?) AND category != '指数'",
+            (d1, d5, d20, d60)
+        ).fetchall()
+    # Group by sector name
+    sectors = {}
+    for r in rows:
+        key = r['name']
+        if key not in sectors:
+            sectors[key] = {'name': key, 'category': r['category'], 'd1': None, 'd5': None, 'd20': None, 'd60': None}
+        if r['date'] == d1: sectors[key]['d1'] = r['change_pct']
+        elif r['date'] == d5: sectors[key]['d5'] = r['change_pct']
+        elif r['date'] == d20: sectors[key]['d20'] = r['change_pct']
+        elif r['date'] == d60: sectors[key]['d60'] = r['change_pct']
+    # Compute returns for multi-day windows using close prices
+    with sqlite3.connect(DB_PATH) as conn:
+        for key in sectors:
+            for days, label in [(5, 'd5'), (20, 'd20'), (60, 'd60')]:
+                if sectors[key][label] is None:
+                    prev_date = dates[days-1] if len(dates) > days-1 else dates[-1]
+                    r = conn.execute(
+                        "SELECT close FROM sector_data WHERE name=? AND date=?",
+                        (key, prev_date)
+                    ).fetchone()
+                    if r:
+                        c1 = conn.execute("SELECT close FROM sector_data WHERE name=? AND date=?", (key, d1)).fetchone()
+                        if c1 and r[0] and r[0] > 0:
+                            sectors[key][label] = round(((c1[0] - r[0]) / r[0]) * 100, 2)
+    return jsonify({"dates": {"d1": d1, "d5": d5, "d20": d20, "d60": d60}, "sectors": list(sectors.values())})
+
+@app.route('/api/macro')
+def api_macro():
+    """Fetch key macro indicators."""
+    indicators = {}
+    # VIX
+    try:
+        r = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=2d", timeout=10)
+        d = r.json()
+        if d['chart']['result']:
+            meta = d['chart']['result'][0]['meta']
+            indicators['vix'] = round(meta.get('regularMarketPrice', 0), 2)
+            indicators['vix_prev'] = round(meta.get('chartPreviousClose', 0), 2)
+    except: pass
+    # DXY
+    try:
+        r = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?interval=1d&range=2d", timeout=10)
+        d = r.json()
+        if d['chart']['result']:
+            meta = d['chart']['result'][0]['meta']
+            indicators['dxy'] = round(meta.get('regularMarketPrice', 0), 2)
+            indicators['dxy_prev'] = round(meta.get('chartPreviousClose', 0), 2)
+    except: pass
+    # 10Y Treasury
+    try:
+        r = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/%5ETNX?interval=1d&range=2d", timeout=10)
+        d = r.json()
+        if d['chart']['result']:
+            meta = d['chart']['result'][0]['meta']
+            indicators['tnx'] = round(meta.get('regularMarketPrice', 0), 2)
+            indicators['tnx_prev'] = round(meta.get('chartPreviousClose', 0), 2)
+    except: pass
+    # Total market volume vs 20-day avg (from SPY)
+    try:
+        with sqlite3.connect(DB_PATH) as conn:
+            vols = conn.execute(
+                "SELECT volume FROM sector_data WHERE symbol='SPY' ORDER BY date DESC LIMIT 21"
+            ).fetchall()
+            if len(vols) >= 2:
+                today_vol = vols[0][0]
+                avg20 = sum(v[0] for v in vols[1:21]) / max(1, len(vols[1:21]))
+                indicators['spy_volume'] = int(today_vol)
+                indicators['spy_volume_avg20'] = int(avg20)
+                indicators['spy_volume_ratio'] = round((today_vol / avg20 - 1) * 100, 1) if avg20 > 0 else 0
+    except: pass
+    return jsonify(indicators)
+
+@app.route('/api/correlation')
+def api_correlation():
+    """Return sector correlation matrix based on 60-day returns."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        dates = [r[0] for r in conn.execute(
+            "SELECT DISTINCT date FROM sector_data ORDER BY date DESC LIMIT 61"
+        ).fetchall()]
+        if len(dates) < 20:
+            return jsonify({"error": "insufficient data"})
+        dates.reverse()  # asc
+        rows = conn.execute(
+            f"SELECT date, name, close FROM sector_data WHERE date IN ({','.join('?'*len(dates))}) AND category != '指数'",
+            dates
+        ).fetchall()
+    # Build price series per sector
+    series = {}
+    for r in rows:
+        series.setdefault(r['name'], {})[r['date']] = r['close']
+    # Compute returns
+    rets = {}
+    for name, prices in series.items():
+        sorted_dates = sorted(prices.keys())
+        if len(sorted_dates) < 10: continue
+        r = []
+        for i in range(1, len(sorted_dates)):
+            if prices[sorted_dates[i-1]] > 0:
+                r.append((prices[sorted_dates[i]] - prices[sorted_dates[i-1]]) / prices[sorted_dates[i-1]])
+        if len(r) >= 5:
+            rets[name] = r
+    # Compute correlation matrix
+    names = sorted(rets.keys())
+    n = len(names)
+    matrix = [[1.0]*n for _ in range(n)]
+    for i in range(n):
+        for j in range(i+1, n):
+            a, b = rets[names[i]], rets[names[j]]
+            m = min(len(a), len(b))
+            if m < 3:
+                matrix[i][j] = matrix[j][i] = 0
+                continue
+            a_s, b_s = a[-m:], b[-m:]
+            ma, mb = sum(a_s)/m, sum(b_s)/m
+            num = sum((a_s[k]-ma)*(b_s[k]-mb) for k in range(m))
+            den = (sum((x-ma)**2 for x in a_s) * sum((x-mb)**2 for x in b_s)) ** 0.5
+            corr = round(num/den, 2) if den > 0 else 0
+            matrix[i][j] = matrix[j][i] = corr
+    return jsonify({"names": names, "matrix": matrix})
+
+# ── China A-Share API Routes ────────────────────────────────
+def _next_update_time(market):
+    now = datetime.now()
+    if market == 'us':
+        t4 = now.replace(hour=4, minute=0, second=0, microsecond=0)
+        t5 = now.replace(hour=5, minute=0, second=0, microsecond=0)
+        if now < t4: return t4.strftime('%m-%d %H:%M')
+        if now < t5: return t5.strftime('%m-%d %H:%M')
+        return (t4 + timedelta(days=1)).strftime('%m-%d %H:%M')
+    else:
+        t14 = now.replace(hour=14, minute=30, second=0, microsecond=0)
+        t15 = now.replace(hour=15, minute=30, second=0, microsecond=0)
+        if now < t14: return t14.strftime('%m-%d %H:%M')
+        if now < t15: return t15.strftime('%m-%d %H:%M')
+        return (t14 + timedelta(days=1)).strftime('%m-%d %H:%M')
+
+@app.route('/api/cn/latest')
+def api_cn_latest():
+    target_date = request.args.get('date', '')
+    auto_refresh = not target_date
+    if not target_date:
+        with sqlite3.connect(CN_DB_PATH) as conn:
+            latest_date = conn.execute("SELECT MAX(date) FROM sector_data").fetchone()[0]
+        target_date = latest_date or (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    with sqlite3.connect(CN_DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT symbol, name, category, close, change_pct, volume, fetched_at FROM sector_data WHERE date = ? ORDER BY change_pct DESC", (target_date,)
+        ).fetchall()
+        summary = conn.execute(
+            "SELECT * FROM daily_summary WHERE date = ?", (target_date,)
+        ).fetchone()
+    if not rows:
+        data = fetch_cn_sector_data(target_date)
+        if data:
+            save_cn_to_db(data, target_date)
+            return jsonify({"date": target_date, "sectors": data, "fetched": "live", "updated_at": datetime.now().strftime('%m-%d %H:%M'), "next_update": _next_update_time('cn')})
+        return jsonify({"error": "no data", "date": target_date})
+    # Auto-refresh stale data when requesting latest
+    if auto_refresh and rows:
+        try:
+            latest_fetched = rows[0]['fetched_at']
+            if latest_fetched:
+                fetched_dt = datetime.strptime(latest_fetched, '%Y-%m-%d %H:%M:%S')
+                if (datetime.now() - fetched_dt).total_seconds() > 6 * 3600:
+                    data = fetch_cn_sector_data(target_date)
+                    if data:
+                        save_cn_to_db(data, target_date)
+                        with sqlite3.connect(CN_DB_PATH) as conn:
+                            conn.row_factory = sqlite3.Row
+                            rows = conn.execute(
+                                "SELECT symbol, name, category, close, change_pct, volume, fetched_at FROM sector_data WHERE date = ? ORDER BY change_pct DESC", (target_date,)
+                            ).fetchall()
+                            summary = conn.execute("SELECT * FROM daily_summary WHERE date = ?", (target_date,)).fetchone()
+                        return jsonify({
+                            "date": target_date,
+                            "sectors": [dict(r) for r in rows],
+                            "summary": dict(summary) if summary else None,
+                            "fetched": "live",
+                            "updated_at": datetime.now().strftime('%m-%d %H:%M'),
+                            "next_update": _next_update_time('cn')
+                        })
+        except Exception as e:
+            app.logger.warning(f"CN auto-refresh failed: {e}")
+    updated_at = max(r['fetched_at'] for r in rows)[:16].replace('T', ' ') if rows else '-'
+    return jsonify({
+        "date": target_date,
+        "sectors": [dict(r) for r in rows],
+        "summary": dict(summary) if summary else None,
+        "fetched": "cached",
+        "updated_at": updated_at,
+        "next_update": _next_update_time('cn')
+    })
+
+@app.route('/api/cn/dates')
+def api_cn_dates():
+    with sqlite3.connect(CN_DB_PATH) as conn:
+        dates = conn.execute("SELECT DISTINCT date FROM sector_data ORDER BY date DESC").fetchall()
+    return jsonify([d[0] for d in dates])
+
+@app.route('/api/cn/sector/<sector_name>')
+def api_cn_sector_detail(sector_name):
+    stocks = CN_SECTOR_STOCKS.get(sector_name, [])
+    if not stocks:
+        return jsonify({"error": "sector not found", "stocks": []})
+    quotes = fetch_cn_stock_quotes(stocks)
+    return jsonify({"sector": sector_name, "stocks": quotes})
+
+@app.route('/api/cn/stock/<symbol>/history')
+def api_cn_stock_history(symbol):
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=3mo"
+        resp = requests.get(url, headers=YF_HEADERS, timeout=15)
+        if resp.status_code != 200:
+            return jsonify({"error": "fetch failed"}), 500
+        data = resp.json()
+        result = data.get('chart', {}).get('result', [None])[0]
+        if not result:
+            return jsonify({"error": "no data"}), 500
+        timestamps = result.get('timestamp', [])
+        quotes = result.get('indicators', {}).get('quote', [{}])[0]
+        ohlc = []
+        for i in range(len(timestamps)):
+            ohlc.append([
+                datetime.fromtimestamp(timestamps[i]).strftime('%Y-%m-%d'),
+                quotes['open'][i] or 0,
+                quotes['close'][i] or 0,
+                quotes['low'][i] or 0,
+                quotes['high'][i] or 0,
+                quotes['volume'][i] or 0,
+            ])
+        return jsonify({"symbol": symbol, "ohlc": ohlc})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/cn/rotation')
+def api_cn_rotation():
+    with sqlite3.connect(CN_DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        dates = [r[0] for r in conn.execute("SELECT DISTINCT date FROM sector_data ORDER BY date DESC LIMIT 70").fetchall()]
+        if len(dates) < 5:
+            return jsonify({"error": "insufficient data"})
+        d1, d5, d20, d60 = dates[0], dates[4] if len(dates) > 4 else dates[-1], dates[19] if len(dates) > 19 else dates[-1], dates[59] if len(dates) > 59 else dates[-1]
+        rows = conn.execute(
+            "SELECT date, name, category, close, change_pct FROM sector_data WHERE date IN (?,?,?,?) AND category != '指数'",
+            (d1, d5, d20, d60)
+        ).fetchall()
+    sectors = {}
+    for r in rows:
+        key = r['name']
+        if key not in sectors:
+            sectors[key] = {'name': key, 'category': r['category'], 'd1': None, 'd5': None, 'd20': None, 'd60': None}
+        if r['date'] == d1: sectors[key]['d1'] = r['change_pct']
+        elif r['date'] == d5: sectors[key]['d5'] = r['change_pct']
+        elif r['date'] == d20: sectors[key]['d20'] = r['change_pct']
+        elif r['date'] == d60: sectors[key]['d60'] = r['change_pct']
+    with sqlite3.connect(CN_DB_PATH) as conn:
+        for key in sectors:
+            for days, label in [(5, 'd5'), (20, 'd20'), (60, 'd60')]:
+                if sectors[key][label] is None:
+                    prev_date = dates[days-1] if len(dates) > days-1 else dates[-1]
+                    r = conn.execute("SELECT close FROM sector_data WHERE name=? AND date=?", (key, prev_date)).fetchone()
+                    if r:
+                        c1 = conn.execute("SELECT close FROM sector_data WHERE name=? AND date=?", (key, d1)).fetchone()
+                        if c1 and r[0] and r[0] > 0:
+                            sectors[key][label] = round(((c1[0] - r[0]) / r[0]) * 100, 2)
+    return jsonify({"dates": {"d1": d1, "d5": d5, "d20": d20, "d60": d60}, "sectors": list(sectors.values())})
+
+@app.route('/api/cn/correlation')
+def api_cn_correlation():
+    with sqlite3.connect(CN_DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        dates = [r[0] for r in conn.execute("SELECT DISTINCT date FROM sector_data ORDER BY date DESC LIMIT 61").fetchall()]
+        if len(dates) < 20:
+            return jsonify({"error": "insufficient data"})
+        dates.reverse()
+        rows = conn.execute(
+            f"SELECT date, name, close FROM sector_data WHERE date IN ({','.join('?'*len(dates))}) AND category != '指数'",
+            dates
+        ).fetchall()
+    series = {}
+    for r in rows:
+        series.setdefault(r['name'], {})[r['date']] = r['close']
+    rets = {}
+    for name, prices in series.items():
+        sorted_dates = sorted(prices.keys())
+        if len(sorted_dates) < 10: continue
+        r = []
+        for i in range(1, len(sorted_dates)):
+            if prices[sorted_dates[i-1]] > 0:
+                r.append((prices[sorted_dates[i]] - prices[sorted_dates[i-1]]) / prices[sorted_dates[i-1]])
+        if len(r) >= 5:
+            rets[name] = r
+    names = sorted(rets.keys())
+    n = len(names)
+    matrix = [[1.0]*n for _ in range(n)]
+    for i in range(n):
+        for j in range(i+1, n):
+            a, b = rets[names[i]], rets[names[j]]
+            m = min(len(a), len(b))
+            if m < 3:
+                matrix[i][j] = matrix[j][i] = 0
+                continue
+            a_s, b_s = a[-m:], b[-m:]
+            ma, mb = sum(a_s)/m, sum(b_s)/m
+            num = sum((a_s[k]-ma)*(b_s[k]-mb) for k in range(m))
+            den = (sum((x-ma)**2 for x in a_s) * sum((x-mb)**2 for x in b_s)) ** 0.5
+            corr = round(num/den, 2) if den > 0 else 0
+            matrix[i][j] = matrix[j][i] = corr
+    return jsonify({"names": names, "matrix": matrix})
+
 @app.errorhandler(404)
 def e404(e): return jsonify({"error": "404"}), 404
 @app.errorhandler(429)
@@ -735,7 +2085,21 @@ def e429(e): return jsonify({"error": "rate limited"}), 429
 
 if __name__ == '__main__':
     init_db()
-    print(f"\n  US Stock Sector Tracker v2.0")
+    init_cn_db()
+    # Seed A-share DB from bundled backup if data is insufficient (Railway volume may be empty)
+    backup_path = os.path.join(os.path.dirname(__file__), 'static', 'cn_sectors.db.bak')
+    if os.path.exists(backup_path):
+        try:
+            with sqlite3.connect(CN_DB_PATH) as conn:
+                cnt = conn.execute("SELECT COUNT(*) FROM sector_data").fetchone()[0]
+            if cnt < 100:
+                import shutil
+                shutil.copy(backup_path, CN_DB_PATH)
+                print(f"  ✅ Seeded cn_sectors.db from backup ({cnt} → restored)")
+        except Exception as e:
+            print(f"  ⚠️ DB seed skipped: {e}")
+    print(f"\n  US + China A-Share Sector Tracker v3.0")
     print(f"  http://localhost:8080")
     print(f"  admin / {ADMIN_PASS}\n")
-    app.run(host='0.0.0.0', port=8080, debug=False)
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port, debug=False)

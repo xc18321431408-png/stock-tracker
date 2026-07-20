@@ -28,20 +28,29 @@ body{font-family:-apple-system,'Microsoft YaHei',sans-serif;background:var(--bg)
 .header h1 span{color:var(--accent)}
 .meta{font-size:12px;color:var(--muted)}
 
-/* Date slider */
-.date-nav{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap}
-.date-nav input[type=range]{flex:1;min-width:200px;accent-color:var(--accent)}
-.date-nav select{background:var(--card);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:6px;font-size:13px}
-.date-nav button{background:var(--accent);border:none;color:#fff;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:12px}
-.date-nav button:hover{opacity:.85}
-.date-nav .date-label{font-weight:700;color:var(--accent);min-width:90px;text-align:center;font-size:14px}
+/* Date Navigator (NEW DESIGN) */
+.date-nav{display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap;user-select:none}
+.date-nav .nav-group{display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:4px}
+.date-nav button.nav-btn{background:transparent;border:none;color:var(--text);width:34px;height:34px;border-radius:8px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.date-nav button.nav-btn:hover:not(:disabled){background:rgba(6,182,212,0.15);color:var(--accent)}
+.date-nav button.nav-btn:active:not(:disabled){transform:scale(0.92)}
+.date-nav button.nav-btn:disabled{color:var(--border);cursor:not-allowed}
+.date-nav .date-display{min-width:120px;text-align:center;padding:6px 14px;font-weight:700;font-size:15px;color:var(--accent);background:rgba(6,182,212,0.08);border-radius:8px;border:1px solid rgba(6,182,212,0.2);white-space:nowrap}
+.date-nav .date-display .weekday{font-size:11px;color:var(--muted);font-weight:500;margin-top:1px}
+.date-nav .date-display.latest{background:rgba(34,197,94,0.08);color:var(--green);border-color:rgba(34,197,94,0.25)}
+.date-nav input[type=range]{flex:1;min-width:180px;accent-color:var(--accent);height:6px;border-radius:3px;background:var(--border);cursor:pointer}
+.date-nav .latest-btn{background:var(--card);border:1px solid var(--border);color:var(--text);padding:7px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;display:flex;align-items:center;gap:5px;transition:all .15s}
+.date-nav .latest-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent);background:rgba(6,182,212,0.1)}
+.date-nav .latest-btn:active:not(:disabled){transform:scale(0.96)}
+.date-nav .latest-btn:disabled{opacity:.4;cursor:not-allowed}
+.date-nav .page-indicator{font-size:11px;color:var(--muted);min-width:50px;text-align:center}
 
 /* Cards */
 .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
 .card .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:6px}
 .card .val{font-size:28px;font-weight:700}
-.card .val.up{color:var(--green)} .card .val.down{color:var(--red)}
+.card .val.up{color:var(--red)} .card .val.down{color:var(--green)}
 .card .sub{font-size:11px;color:var(--muted);margin-top:4px}
 
 /* Category sections */
@@ -55,7 +64,7 @@ body{font-family:-apple-system,'Microsoft YaHei',sans-serif;background:var(--bg)
 .sector-item:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,.3)}
 .sector-item .sym{font-size:11px;color:var(--muted)}
 .sector-item .chg{font-weight:700;font-size:14px}
-.chg.up{color:var(--green)} .chg.down{color:var(--red)}
+.chg.up{color:var(--red)} .chg.down{color:var(--green)}
 
 /* Modal */
 .modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:100;justify-content:center;align-items:center}
@@ -88,19 +97,36 @@ canvas{max-height:380px}
 
 .footer{text-align:center;padding:20px;color:var(--muted);font-size:11px;border-top:1px solid var(--border);margin-top:20px}
 
+/* Toast notification */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--card);border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:8px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:200;opacity:0;transition:all .3s ease}
+.toast.show{transform:translateX(-50%) translateY(0);opacity:1}
+
 @media(max-width:768px){
   .quant-panel{grid-template-columns:1fr}
   .sector-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+  .date-nav .page-indicator{display:none}
+  .date-nav input[type=range]{order:1;width:100%;margin-top:4px}
+  .date-nav .nav-group{order:0}
+  .date-nav .latest-btn{order:0}
 }
 </style>
 </head>
 <body>
 <div class="container">
 
+<!-- Market Switcher -->
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:10px">
+  <span style="font-size:12px;color:var(--muted)">市场选择:</span>
+  <button id="marketUS" onclick="switchMarket('us')" style="background:var(--accent);border:none;color:#fff;padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">🇺🇸 美股</button>
+  <button id="marketCN" onclick="switchMarket('cn')" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">🇨🇳 A股</button>
+</div>
+
 <!-- Tabs -->
 <div class="tabs">
   <button class="tab active" onclick="switchTab('dashboard')">📊 板块追踪</button>
   <button class="tab" onclick="switchTab('bubble')">🫧 涨跌气泡图</button>
+  <button class="tab" onclick="switchTab('rotation')">🔥 板块轮动</button>
+  <button class="tab" onclick="switchTab('correlation')">🔗 相关性矩阵</button>
   <button class="tab" onclick="switchTab('quant')">📈 量化交易</button>
 </div>
 
@@ -111,16 +137,30 @@ canvas{max-height:380px}
     <h1>🇺🇸 <span>美股板块追踪</span> v2.0</h1>
     <div class="meta"><span id="status"></span> | <span id="dateLabel"></span> | 共 <span id="totalSectors">-</span> 个子板块</div>
   </div>
-  <div class="meta">每日7:00自动更新 | 数据: StockAnalysis</div>
+  <div class="meta" id="updateScheduleMeta">美股 04:00/05:00 自动更新 | A股 14:30/15:30 自动更新</div>
 </div>
 
+<!-- NEW DATE NAVIGATOR -->
 <div class="date-nav">
-  <button onclick="navigateDate(-1)">◀ 前一天</button>
-  <input type="range" id="dateSlider" min="0" max="100" value="100" oninput="onSliderChange(this.value)" title="拖动选择日期">
-  <button onclick="navigateDate(1)">后一天 ▶</button>
-  <span class="date-label" id="selectedDateLabel">最新</span>
-  <button onclick="navigateToLatest()" style="background:var(--card);border:1px solid var(--border);">🔁 回到最新</button>
+  <div class="nav-group">
+    <button class="nav-btn" id="btnPrev" onclick="navigateDate(-1)" title="前一天 (←)">◀</button>
+    <div class="date-display latest" id="selectedDateLabel">
+      <div>最新</div>
+      <div class="weekday">实时数据</div>
+    </div>
+    <button class="nav-btn" id="btnNext" onclick="navigateDate(1)" title="后一天 (→)">▶</button>
+  </div>
+
+  <input type="range" id="dateSlider" min="0" max="100" value="100" oninput="onSliderChange(this.value)" title="拖动选择历史日期">
+
+  <span class="page-indicator" id="pageIndicator"></span>
+
+  <button class="latest-btn" id="btnLatest" onclick="navigateToLatest()" title="回到最新 (Home)">
+    <span>⟲</span> 回到最新
+  </button>
 </div>
+
+<div class="cards" id="macroCards" style="display:none;margin-bottom:12px"></div>
 
 <div class="cards" id="summaryCards"></div>
 
@@ -135,7 +175,10 @@ canvas{max-height:380px}
 <div class="modal-overlay" id="modalOverlay">
   <div class="modal">
     <button class="close" onclick="closeModal()">&times;</button>
-    <h3 id="modalTitle">🔍 板块详情</h3>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <h3 id="modalTitle" style="margin:0">🔍 板块详情</h3>
+      <button id="compareBtn" onclick="showCompareChart()" style="background:var(--card);border:1px solid var(--border);color:var(--accent);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">📊 对比 (0)</button>
+    </div>
     <div id="modalContent" class="loading">加载中...</div>
   </div>
 </div>
@@ -146,11 +189,37 @@ canvas{max-height:380px}
 <div class="header">
   <div>
     <h1>🫧 <span>板块涨跌气泡图</span></h1>
-    <div class="meta"><span id="bubbleDate"></span> | 气泡大小=成交量 | 绿色=涨 红色=跌</div>
+    <div class="meta"><span id="bubbleDate"></span> | 气泡大小=成交量 | 红色=涨 绿色=跌</div>
   </div>
 </div>
 <div class="chart-box" style="min-height:600px">
   <canvas id="bubbleChart"></canvas>
+</div>
+</div>
+
+<!-- ==================== ROTATION TAB ==================== -->
+<div id="tab-rotation" style="display:none">
+<div class="header">
+  <div>
+    <h1>🔥 <span>板块轮动热力图</span></h1>
+    <div class="meta">1日 / 5日 / 20日 / 60日 涨跌幅矩阵 | 红色=强 绿色=弱</div>
+  </div>
+</div>
+<div class="chart-box" style="min-height:650px">
+  <div id="rotationChart" style="width:100%;height:620px"></div>
+</div>
+</div>
+
+<!-- ==================== CORRELATION TAB ==================== -->
+<div id="tab-correlation" style="display:none">
+<div class="header">
+  <div>
+    <h1>🔗 <span>板块相关性矩阵</span></h1>
+    <div class="meta">基于近60日收盘价计算相关系数 | 1=完全正相关 -1=完全负相关</div>
+  </div>
+</div>
+<div class="chart-box" style="min-height:650px">
+  <div id="correlationChart" style="width:100%;height:620px"></div>
 </div>
 </div>
 
@@ -180,6 +249,8 @@ canvas{max-height:380px}
     <div id="btParams"></div>
 
     <button onclick="runBacktest()">🚀 开始回测</button>
+    <button onclick="runBacktestOptimize()" style="margin-top:8px;background:var(--card);border:1px solid var(--border);color:var(--accent)">🔍 自动寻优</button>
+    <div id="optimizeStatus" style="margin-top:6px;font-size:11px;color:var(--muted)"></div>
     <div style="margin-top:8px;font-size:11px;color:var(--muted)">
       ⚠️ 回测结果不代表未来收益。数据基于近1年历史价格。
     </div>
@@ -197,6 +268,12 @@ canvas{max-height:380px}
     </div>
     <div style="margin-top:16px;font-size:11px;color:var(--muted)" id="btMeta"></div>
   </div>
+</div>
+
+<!-- Backtest Chart -->
+<div class="chart-box" style="margin-top:20px;display:none" id="btChartBox">
+  <h3>📈 资金曲线 & 买卖点</h3>
+  <div id="backtestChart" style="width:100%;height:380px"></div>
 </div>
 
 <!-- Backtest History -->
@@ -217,74 +294,230 @@ canvas{max-height:380px}
 </div>
 
 <div class="footer">US Stock Sector Tracker v2.0 | 数据每日7:00更新 | 不构成投资建议</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
 </div>
 
 <script>
 // ── Tab Switching ──
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', (tab==='dashboard'&&i===0)||(tab==='bubble'&&i===1)||(tab==='quant'&&i===2));
+    t.classList.toggle('active', (tab==='dashboard'&&i===0)||(tab==='bubble'&&i===1)||(tab==='rotation'&&i===2)||(tab==='correlation'&&i===3)||(tab==='quant'&&i===4));
   });
   document.getElementById('tab-dashboard').style.display = tab==='dashboard'?'block':'none';
   document.getElementById('tab-bubble').style.display = tab==='bubble'?'block':'none';
+  document.getElementById('tab-rotation').style.display = tab==='rotation'?'block':'none';
+  document.getElementById('tab-correlation').style.display = tab==='correlation'?'block':'none';
   document.getElementById('tab-quant').style.display = tab==='quant'?'block':'none';
   if (tab==='quant') loadBacktestHistory();
   if (tab==='bubble') renderBubbleChart();
+  if (tab==='rotation') renderRotationChart();
+  if (tab==='correlation') renderCorrelationChart();
 }
 
 // ── Dashboard ──
 let allSectors = [];
 let allDates = [];
-let currentDateIdx = -1; // -1 = latest
+let currentDateIdx = -1; // -1 = latest (newest date not in slider)
+let isLoading = false;
+let market = 'us'; // 'us' or 'cn'
+
+function switchMarket(m) {
+  if (m === market) return;
+  market = m;
+  document.getElementById('marketUS').style.background = m==='us' ? 'var(--accent)' : 'transparent';
+  document.getElementById('marketUS').style.color = m==='us' ? '#fff' : 'var(--muted)';
+  document.getElementById('marketUS').style.border = m==='us' ? 'none' : '1px solid var(--border)';
+  document.getElementById('marketCN').style.background = m==='cn' ? 'var(--accent)' : 'transparent';
+  document.getElementById('marketCN').style.color = m==='cn' ? '#fff' : 'var(--muted)';
+  document.getElementById('marketCN').style.border = m==='cn' ? 'none' : '1px solid var(--border)';
+  // Update title
+  document.querySelector('.header h1').innerHTML = m==='us'
+    ? '🇺🇸 <span>美股板块追踪</span> v3.0'
+    : '🇨🇳 <span>A股板块追踪</span> v3.0';
+
+  // Reset state and force reload for new market
+  currentDateIdx = -1;
+  allDates = [];
+  allSectors = [];
+  updateDateNavUI();
+
+  // Clear display to avoid showing stale data
+  document.getElementById('summaryCards').innerHTML = '<div class="card"><div class="lbl">加载中...</div><div class="val">⏳</div></div>';
+  document.getElementById('categoriesContainer').innerHTML = '';
+  if (window._chart) { window._chart.destroy(); window._chart = null; }
+
+  // Reload data for the selected market, then refresh current tab
+  loadDates().then(async () => {
+    updateDateNavUI();
+    await loadDashboard();
+    if (market === 'us') loadMacro(); else document.getElementById('macroCards').style.display = 'none';
+
+    // Refresh current tab visuals after data is ready
+    const activeTab = document.querySelector('.tab.active');
+    if (activeTab) {
+      const text = activeTab.textContent;
+      if (text.includes('气泡')) renderBubbleChart();
+      else if (text.includes('轮动')) renderRotationChart();
+      else if (text.includes('相关')) renderCorrelationChart();
+      else if (text.includes('量化')) loadBacktestHistory();
+    }
+  });
+}
+
+function apiBase(path) {
+  return market === 'cn' ? '/api/cn' + path : '/api' + path;
+}
+
+const WEEKDAYS = ['周日','周一','周二','周三','周四','周五','周六'];
+
+function getWeekday(dateStr) {
+  try { return WEEKDAYS[new Date(dateStr).getDay()]; } catch(e) { return ''; }
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function setLoading(loading) {
+  isLoading = loading;
+  const ids = ['btnPrev','btnNext','btnLatest','dateSlider'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = loading;
+  });
+}
+
+function updateDateNavUI() {
+  const labelEl = document.getElementById('selectedDateLabel');
+  const slider = document.getElementById('dateSlider');
+  const prevBtn = document.getElementById('btnPrev');
+  const nextBtn = document.getElementById('btnNext');
+  const latestBtn = document.getElementById('btnLatest');
+  const indicator = document.getElementById('pageIndicator');
+
+  const total = allDates.length;
+  const atLatest = currentDateIdx === -1;
+
+  if (atLatest) {
+    labelEl.classList.add('latest');
+    labelEl.innerHTML = '<div>最新</div><div class="weekday">实时数据</div>';
+    slider.value = total > 0 ? total - 1 : 0;
+    if (indicator) indicator.textContent = total > 0 ? `共 ${total} 个交易日` : '';
+  } else {
+    labelEl.classList.remove('latest');
+    const date = allDates[currentDateIdx];
+    const wd = getWeekday(date);
+    labelEl.innerHTML = `<div>${date || ''}</div><div class="weekday">${wd}</div>`;
+    slider.value = currentDateIdx;
+    if (indicator) indicator.textContent = `${currentDateIdx + 1} / ${total}`;
+  }
+
+  // Disable buttons at boundaries
+  prevBtn.disabled = isLoading || (!atLatest && currentDateIdx <= 0);
+  nextBtn.disabled = isLoading || atLatest;
+  latestBtn.disabled = isLoading || atLatest;
+}
 
 async function loadDates() {
   try {
-    const resp = await fetch('/api/dates');
-    allDates = (await resp.json()).reverse(); // ASC order: oldest first
+    const resp = await fetch(apiBase('/dates'));
+    allDates = (await resp.json()).reverse(); // ASC: oldest first
     if (allDates.length > 0) {
       document.getElementById('dateSlider').max = allDates.length - 1;
-      document.getElementById('dateSlider').value = allDates.length - 1; // newest at end
-      currentDateIdx = allDates.length - 1;
+      document.getElementById('dateSlider').value = allDates.length - 1;
     }
   } catch(e) {}
 }
 
 function onSliderChange(val) {
-  currentDateIdx = parseInt(val);
-  const date = allDates[currentDateIdx];
-  document.getElementById('selectedDateLabel').textContent = date || '加载中...';
+  const total = allDates.length;
+  const idx = parseInt(val);
+  // If dragged to the very end, treat as "latest" for cleaner UX
+  if (idx >= total - 1) {
+    navigateToLatest();
+    return;
+  }
+  currentDateIdx = idx;
+  updateDateNavUI();
+  const date = allDates[idx];
   loadDashboard(date);
 }
 
 function navigateDate(dir) {
-  // dates are DESC [newest(0), ..., oldest(N-1)]
-  // dir=-1 means go newer (前一天), dir=+1 means go older (后一天)
-  // Invert: -1 becomes -1 (newer/smaller index), +1 becomes +1 (older/larger index)
-  // Actually: "前一天" = older = +1, "后一天" = newer = -1
-  currentDateIdx = Math.max(0, Math.min(allDates.length - 1, currentDateIdx + dir));
-  document.getElementById('dateSlider').value = currentDateIdx;
-  const date = allDates[currentDateIdx];
-  document.getElementById('selectedDateLabel').textContent = date;
+  if (isLoading) return;
+  const total = allDates.length;
+  if (total === 0) return;
+
+  if (currentDateIdx === -1) {
+    // Currently at "latest" — going "前一天" (older) should go to the second newest date
+    // because "最新" itself isn't in allDates, the most recent in allDates is total-1
+    if (dir === -1) {
+      currentDateIdx = total - 2; // jump to previous trading day
+      if (currentDateIdx < 0) currentDateIdx = 0;
+    } else {
+      showToast('已是最新数据');
+      return;
+    }
+  } else {
+    const newIdx = currentDateIdx + dir;
+    if (newIdx < 0) {
+      showToast('已是最早的数据');
+      return;
+    }
+    if (newIdx >= total) {
+      // Jump back to latest
+      currentDateIdx = -1;
+    } else {
+      currentDateIdx = newIdx;
+    }
+  }
+
+  updateDateNavUI();
+  const date = currentDateIdx === -1 ? null : allDates[currentDateIdx];
   loadDashboard(date);
 }
 
+function navigateToLatest() {
+  if (isLoading) return;
+  if (currentDateIdx === -1) {
+    showToast('当前已是最新');
+    return;
+  }
+  currentDateIdx = -1;
+  updateDateNavUI();
+  loadDashboard();
+}
+
 async function loadDashboard(specificDate) {
+  setLoading(true);
   try {
-    const url = specificDate ? '/api/latest?date=' + specificDate : '/api/latest';
+    const url = specificDate ? apiBase('/latest?date=') + specificDate : apiBase('/latest');
     const resp = await fetch(url);
     const data = await resp.json();
-    if (data.error) { document.getElementById('dateLabel').textContent = data.error; return; }
+    if (data.error) { document.getElementById('dateLabel').textContent = data.error; setLoading(false); return; }
 
     allSectors = data.sectors || [];
-    document.getElementById('dateLabel').textContent = '数据日期: ' + data.date;
+    const updateInfo = data.updated_at ? `更新于 ${data.updated_at}` : '';
+    const nextInfo = data.next_update ? ` | 下次: ${data.next_update}` : '';
+    document.getElementById('dateLabel').innerHTML = '数据日期: ' + data.date + ' <span style="color:var(--muted);font-size:11px">' + updateInfo + nextInfo + '</span>';
+
     if (!specificDate) {
-      document.getElementById('selectedDateLabel').textContent = data.date;
-      // Update slider to latest
       if (allDates.length > 0) {
-        currentDateIdx = allDates.length - 1;
-        document.getElementById('dateSlider').value = currentDateIdx;
+        if (data.date === allDates[allDates.length - 1]) {
+          currentDateIdx = -1;
+        } else {
+          const found = allDates.indexOf(data.date);
+          currentDateIdx = found >= 0 ? found : -1;
+        }
       }
+      updateDateNavUI();
     }
+
     document.getElementById('status').innerHTML = data.fetched==='live'
       ? '<span style="color:var(--green)">● 实时</span>'
       : '<span style="color:var(--blue)">● 已缓存</span>';
@@ -293,23 +526,28 @@ async function loadDashboard(specificDate) {
     renderSummary(allSectors);
     renderChart(allSectors);
     renderCategories(allSectors);
+    if (market === 'us') loadMacro(); else document.getElementById('macroCards').style.display = 'none';
   } catch(e) { console.error(e); }
+  setLoading(false);
 }
 
 function renderSummary(sectors) {
+  const isCN = market === 'cn';
   const sub = sectors.filter(s => s.category !== '指数');
   const up = sub.filter(s => s.change_pct > 0).length;
   const down = sub.filter(s => s.change_pct < 0).length;
   const best = sub.length ? sub.reduce((a,b) => a.change_pct > b.change_pct ? a : b) : null;
   const worst = sub.length ? sub.reduce((a,b) => a.change_pct < b.change_pct ? a : b) : null;
-  const spy = sectors.find(s => s.symbol === 'SPY');
+  const indexStock = sectors.find(s => s.symbol === (isCN ? 'SH000001' : 'SPY'));
+  const currency = isCN ? '¥' : '$';
+  const indexName = isCN ? '上证指数' : '标普500';
 
   document.getElementById('summaryCards').innerHTML = `
     <div class="card"><div class="lbl">📈 上涨板块</div><div class="val up">${up}</div><div class="sub">/ ${sub.length} 个子板块</div></div>
     <div class="card"><div class="lbl">📉 下跌板块</div><div class="val down">${down}</div><div class="sub">占比 ${sub.length?Math.round(down/sub.length*100):0}%</div></div>
     <div class="card"><div class="lbl">🏆 最强</div><div class="val up">${best?best.change_pct.toFixed(2)+'%':'-'}</div><div class="sub">${best?best.name:''} (${best?best.symbol:''})</div></div>
     <div class="card"><div class="lbl">💔 最弱</div><div class="val down">${worst?worst.change_pct.toFixed(2)+'%':'-'}</div><div class="sub">${worst?worst.name:''} (${worst?worst.symbol:''})</div></div>
-    <div class="card"><div class="lbl">📊 标普500</div><div class="val ${spy&&spy.change_pct>=0?'up':'down'}">${spy?'$'+spy.close.toFixed(2):'-'}</div><div class="sub">${spy?(spy.change_pct>=0?'+':'')+spy.change_pct.toFixed(2)+'%':''}</div></div>
+    <div class="card"><div class="lbl">📊 ${indexName}</div><div class="val ${indexStock&&indexStock.change_pct>=0?'up':'down'}">${indexStock?currency+indexStock.close.toFixed(2):'-'}</div><div class="sub">${indexStock?(indexStock.change_pct>=0?'+':'')+indexStock.change_pct.toFixed(2)+'%':''}</div></div>
   `;
 }
 
@@ -328,7 +566,7 @@ function renderChart(sectors) {
       datasets: [{
         label: '涨跌幅 %',
         data: show.map(s => s.change_pct),
-        backgroundColor: show.map(s => s.change_pct >= 0 ? 'rgba(34,197,94,.7)' : 'rgba(239,68,68,.7)'),
+        backgroundColor: show.map(s => s.change_pct >= 0 ? 'rgba(239,68,68,.7)' : 'rgba(34,197,94,.7)'),
         borderRadius: 3,
       }]
     },
@@ -347,8 +585,13 @@ function renderChart(sectors) {
 function renderCategories(sectors) {
   const sub = sectors.filter(s => s.category !== '指数');
   const cats = [...new Set(sub.map(s => s.category))];
+  const watchlist = getWatchlist();
 
   let html = '';
+  // Watchlist filter button
+  if (watchlist.length > 0) {
+    html += `<div style="margin-bottom:12px"><button onclick="filterWatchlist()" style="background:var(--card);border:1px solid var(--border);color:var(--accent);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px">⭐ 我的关注 (${watchlist.length})</button> <button onclick="renderCategories(allSectors)" style="background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;margin-left:6px">显示全部</button></div>`;
+  }
   for (const cat of cats) {
     const items = sub.filter(s => s.category === cat).sort((a,b) => b.change_pct - a.change_pct);
     html += `<div class="cat-section">
@@ -357,14 +600,32 @@ function renderCategories(sectors) {
     for (const s of items) {
       const cls = s.change_pct >= 0 ? 'up' : 'down';
       const sign = s.change_pct >= 0 ? '+' : '';
+      const star = watchlist.includes(s.symbol) ? '⭐' : '☆';
+      const inCompare = compareList.findIndex(c => c.symbol === s.symbol) >= 0;
       html += `<div class="sector-item" onclick="openSectorDetail('${s.name}')">
-        <div><strong>${s.name}</strong><br><span class="sym">${s.symbol} | \$${s.close.toFixed(2)}</span></div>
-        <div class="chg ${cls}">${sign}${s.change_pct.toFixed(2)}%</div>
+        <div>
+          <div style="display:flex;align-items:center;gap:4px">
+            <span onclick="event.stopPropagation();toggleWatch('${s.symbol}')" style="cursor:pointer;font-size:12px" title="关注/取消">${star}</span>
+            <strong>${s.name}</strong>
+          </div>
+          <span class="sym">${s.symbol} | ${market==='cn'?'¥':'\$'}${s.close.toFixed(2)}</span>
+        </div>
+        <div style="text-align:right">
+          <div class="chg ${cls}">${sign}${s.change_pct.toFixed(2)}%</div>
+          <div onclick="event.stopPropagation();toggleCompare('${s.symbol}','${s.name}')" style="font-size:10px;color:${inCompare?'var(--accent)':'var(--muted)'};cursor:pointer;margin-top:2px">${inCompare?'✓ 已加入对比':'+ 对比'}</div>
+        </div>
       </div>`;
     }
     html += `</div></div>`;
   }
   document.getElementById('categoriesContainer').innerHTML = html;
+}
+
+function filterWatchlist() {
+  const list = getWatchlist();
+  const filtered = allSectors.filter(s => list.includes(s.symbol));
+  if (filtered.length === 0) { showToast('关注列表为空'); return; }
+  renderCategories(filtered);
 }
 
 // ── Modal for Top 10 Stocks ──
@@ -374,13 +635,14 @@ async function openSectorDetail(name) {
   document.getElementById('modalContent').innerHTML = '<div class="loading">⏳ 加载中...</div>';
 
   try {
-    const resp = await fetch('/api/sector/' + encodeURIComponent(name));
+    const resp = await fetch(apiBase('/sector/') + encodeURIComponent(name));
     const data = await resp.json();
     if (!data.stocks || data.stocks.length === 0) {
       document.getElementById('modalContent').innerHTML = '<p style="color:var(--muted)">该板块暂无龙头股数据</p>';
       return;
     }
     window._sectorStocks = data.stocks;
+    const currency = market === 'cn' ? '¥' : '$';
     let html = '<table><thead><tr><th>#</th><th>代码</th><th>公司</th><th>简介</th><th>最新价</th><th>涨跌</th><th>K线</th></tr></thead><tbody>';
     for (let i = 0; i < data.stocks.length; i++) {
       const s = data.stocks[i];
@@ -391,7 +653,7 @@ async function openSectorDetail(name) {
         '<td><strong>' + s.symbol + '</strong></td>' +
         '<td style="font-size:12px">' + (s.name || '-') + '</td>' +
         '<td style="font-size:11px;color:var(--muted);max-width:160px">' + (s.desc || '') + '</td>' +
-        '<td>$' + s.close.toFixed(2) + '</td>' +
+        '<td>' + currency + s.close.toFixed(2) + '</td>' +
         '<td class="' + cls + '" style="font-weight:700">' + sign + s.change_pct.toFixed(2) + '%</td>' +
         '<td><button onclick="showChart(\'' + s.symbol + '\',\'' + i + '\')" style="background:var(--accent);border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">📈 查看</button></td>' +
       '</tr>';
@@ -407,22 +669,25 @@ async function openSectorDetail(name) {
 }
 
 function showChart(symbol, idx) {
-  // Highlight selected row
   const rows = document.querySelectorAll('#modalContent tbody tr');
   rows.forEach((r, i) => { r.style.background = i === parseInt(idx) ? 'rgba(6,182,212,0.15)' : ''; });
 
   const container = document.getElementById('chartContainer');
   container.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">⏳ 加载K线数据...</div>';
 
-  // Fetch OHLC data from our own API
-  fetch('/api/stock/' + symbol + '/history')
+  fetch(apiBase('/stock/') + symbol + '/history')
     .then(r => r.json())
     .then(data => {
       if (data.error || !data.ohlc || data.ohlc.length < 10) {
-        container.innerHTML = '<p style="text-align:center;padding-top:200px;color:var(--red)">❌ 数据加载失败</p>';
+        container.innerHTML = '<p style="text-align:center;padding-top:200px;color:var(--red)">❌ 数据不足: ' + (data.error || '少于10个交易日') + '</p>';
         return;
       }
-      renderEChartsCandlestick(symbol, data.ohlc);
+      try {
+        renderEChartsCandlestick(symbol, data.ohlc);
+      } catch (err) {
+        console.error('K线渲染失败:', err);
+        container.innerHTML = '<p style="text-align:center;padding-top:200px;color:var(--red)">❌ K线渲染失败: ' + err.message + '</p><pre style="color:var(--muted);font-size:11px;text-align:left;padding:20px">' + err.stack + '</pre>';
+      }
     })
     .catch(e => {
       container.innerHTML = '<p style="text-align:center;padding-top:200px;color:var(--red)">❌ 请求失败: ' + e.message + '</p>';
@@ -434,214 +699,167 @@ function calcMA(data, period) {
   for (let i = 0; i < data.length; i++) {
     if (i < period - 1) { result.push(null); continue; }
     let sum = 0;
-    for (let j = 0; j < period; j++) sum += data[i - j][1]; // close price
+    for (let j = 0; j < period; j++) sum += data[i - j][1];
     result.push(+(sum / period).toFixed(2));
   }
   return result;
 }
 
 function calcBB(data, period, mult) {
-  // Bollinger Bands: middle=SMA, upper=SMA+mult*std, lower=SMA-mult*std
   const mid = [], upper = [], lower = [];
   for (let i = 0; i < data.length; i++) {
     if (i < period - 1) { mid.push(null); upper.push(null); lower.push(null); continue; }
     let sum = 0;
-    for (let j = 0; j < period; j++) sum += data[i - j][2]; // close
+    for (let j = 0; j < period; j++) sum += data[i - j][2];
     const avg = sum / period;
     let variance = 0;
     for (let j = 0; j < period; j++) variance += Math.pow(data[i - j][2] - avg, 2);
     const std = Math.sqrt(variance / period);
-    mid.push(+avg.toFixed(2));
-    upper.push(+(avg + mult * std).toFixed(2));
-    lower.push(+(avg - mult * std).toFixed(2));
+    mid.push(+avg.toFixed(2)); upper.push(+(avg + mult * std).toFixed(2)); lower.push(+(avg - mult * std).toFixed(2));
   }
   return { mid, upper, lower };
 }
 
-function calcRegression(prices, futureDays) {
-  // Simple linear regression on close prices, project forward
-  const n = prices.length;
-  let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
-  for (let i = 0; i < n; i++) {
-    sumX += i; sumY += prices[i]; sumXY += i * prices[i]; sumX2 += i * i;
-  }
-  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-  const intercept = (sumY - slope * sumX) / n;
-
-  const line = [];
-  for (let i = 0; i < n + futureDays; i++) {
-    line.push(+(intercept + slope * i).toFixed(2));
-  }
-  return { line, slope, intercept };
+function calcFibonacci(high, low) {
+  const range = high - low;
+  return { 0: +high.toFixed(2), 0.236: +(high - range*0.236).toFixed(2), 0.382: +(high - range*0.382).toFixed(2), 0.5: +(high - range*0.5).toFixed(2), 0.618: +(high - range*0.618).toFixed(2), 1: +low.toFixed(2) };
 }
 
-function monteCarloSim(lastPrice, dailyVolatility, days, simulations) {
-  // Geometric Brownian Motion Monte Carlo simulation
-  const results = [];
-  for (let s = 0; s < simulations; s++) {
-    let price = lastPrice;
-    for (let d = 0; d < days; d++) {
-      // Box-Muller transform for normal random
-      const u1 = Math.random() || 0.0001;
-      const u2 = Math.random();
-      const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-      price *= Math.exp(dailyVolatility * z);
+function calcSupportResistance(highs, lows, lookback) {
+  const levels = {};
+  for (let i = lookback; i < highs.length - lookback; i++) {
+    let isH = true, isL = true;
+    for (let j = i - lookback; j <= i + lookback; j++) {
+      if (j === i) continue;
+      if (highs[j] >= highs[i]) isH = false;
+      if (lows[j] <= lows[i]) isL = false;
     }
-    results.push(price);
+    if (isH) { const p = +highs[i].toFixed(2); levels[p] = (levels[p]||0)+1; }
+    if (isL) { const p = +lows[i].toFixed(2); levels[p] = (levels[p]||0)+1; }
   }
-  results.sort((a, b) => a - b);
-  const p10 = results[Math.floor(simulations * 0.1)];
-  const p50 = results[Math.floor(simulations * 0.5)];
-  const p90 = results[Math.floor(simulations * 0.9)];
-  return { p10, p50, p90, lastPrice, days };
+  return Object.entries(levels).filter(([,c]) => c >= 2).map(([p]) => +p).sort((a,b) => b-a);
+}
+
+function calcIchimoku(highs, lows, n) {
+  const tenkan = [], kijun = [], spanA = [], spanB = [];
+  for (let i = 0; i < n + 26; i++) {
+    if (i >= 8 && i < n) { let h=-Infinity,l=Infinity; for(let j=i-8;j<=i;j++){h=Math.max(h,highs[j]);l=Math.min(l,lows[j]);} tenkan.push(+((h+l)/2).toFixed(2)); } else tenkan.push(null);
+    if (i >= 25 && i < n) { let h=-Infinity,l=Infinity; for(let j=i-25;j<=i;j++){h=Math.max(h,highs[j]);l=Math.min(l,lows[j]);} kijun.push(+((h+l)/2).toFixed(2)); } else kijun.push(null);
+    if (i >= 25 && i-26 >= 0 && tenkan[i-26] !== null && kijun[i-26] !== null) spanA.push(+((tenkan[i-26]+kijun[i-26])/2).toFixed(2)); else spanA.push(null);
+    if (i >= 51 && i-26 < n) { let h=-Infinity,l=Infinity; for(let j=i-51;j<=Math.min(i-26,n-1);j++){h=Math.max(h,highs[j]);l=Math.min(l,lows[j]);} spanB.push(+((h+l)/2).toFixed(2)); } else spanB.push(null);
+  }
+  return { tenkan, kijun, spanA, spanB };
+}
+
+function calcMonteCarlo(lastPrice, returns, days, sims) {
+  const avg = returns.reduce((a,b)=>a+b,0)/returns.length;
+  const vari = returns.reduce((a,b)=>a+Math.pow(b-avg,2),0)/returns.length;
+  const vol = Math.sqrt(vari);
+  const results = [];
+  for (let s = 0; s < sims; s++) {
+    let p = lastPrice;
+    for (let d = 0; d < days; d++) {
+      const u1 = Math.random()||0.0001, u2 = Math.random();
+      p *= Math.exp(vol * Math.sqrt(-2*Math.log(u1)) * Math.cos(2*Math.PI*u2));
+    }
+    results.push(p);
+  }
+  results.sort((a,b)=>a-b);
+  return { p05:results[Math.floor(sims*0.05)], p25:results[Math.floor(sims*0.25)], p50:results[Math.floor(sims*0.50)], p75:results[Math.floor(sims*0.75)], p95:results[Math.floor(sims*0.95)] };
 }
 
 function renderEChartsCandlestick(symbol, ohlc) {
+  const currency = market==='cn' ? '¥' : '$';
   const container = document.getElementById('chartContainer');
   container.innerHTML = '' +
-    '<div style="display:flex;gap:12px;margin-bottom:4px;align-items:center">' +
-      '<span style="color:var(--accent);font-weight:700;font-size:14px">🕯️ ' + symbol + ' K线 + 走势预测</span>' +
-      '<span style="color:var(--muted);font-size:10px;margin-left:8px">布林带 | 线性回归 | 蒙特卡洛概率区间</span>' +
+    '<div style="display:flex;gap:8px;margin-bottom:4px;align-items:center;flex-wrap:wrap">' +
+      '<span style="color:var(--accent);font-weight:700;font-size:14px">🕯️ ' + symbol + '</span>' +
+      '<span style="font-size:10px;color:var(--muted)">一目均衡云 | 斐波那契 | 布林带 | 蒙特卡洛 | 支撑阻力</span>' +
     '</div>' +
-    '<div id="echart-main" style="height:380px;width:100%"></div>' +
+    '<div id="echart-main" style="height:420px;width:100%"></div>' +
     '<div id="echart-vol" style="height:100px;width:100%"></div>' +
-    '<div id="prediction-summary" style="margin-top:8px;padding:8px 12px;background:var(--card);border-radius:8px;font-size:11px;color:var(--muted)"></div>';
+    '<div id="prediction-summary" style="margin-top:8px;padding:10px;background:var(--card);border-radius:8px;font-size:11px"></div>';
 
+  const n = ohlc.length;
   const dates = ohlc.map(d => d[0]);
   const ohlcData = ohlc.map(d => [d[1], d[2], d[3], d[4]]);
-  const closes = ohlc.map(d => d[2]);
+  const opens = ohlc.map(d => d[1]), closes = ohlc.map(d => d[2]), lows = ohlc.map(d => d[3]), highs = ohlc.map(d => d[4]);
   const volumes = ohlc.map(d => d[5]);
-  const lastPrice = closes[closes.length - 1];
-  const lastDate = dates[dates.length - 1];
+  const lastPrice = closes[n-1], lastDate = dates[n-1];
 
-  // Indicators
-  const ma5 = calcMA(ohlc, 5);
-  const ma10 = calcMA(ohlc, 10);
-  const ma20 = calcMA(ohlc, 20);
+  const ma5 = calcMA(ohlc, 5), ma10 = calcMA(ohlc, 10), ma20 = calcMA(ohlc, 20);
   const bb = calcBB(ohlc, 20, 2);
+  const ichi = calcIchimoku(highs, lows, n);
 
-  // Regression trend
-  const N = Math.min(30, closes.length);
-  const recentCloses = closes.slice(-N);
-  const reg = calcRegression(recentCloses, 10);
+  const fibH = Math.max(...highs.slice(-60)), fibL = Math.min(...lows.slice(-60));
+  const fib = calcFibonacci(fibH, fibL);
+  const fibMarkLines = Object.entries(fib).map(([r,price]) => ({ name: r==='0'?'100% '+currency+price:r==='1'?'0% '+currency+price:(+(100-+r*100)).toFixed(1)+'%', yAxis: price }));
 
-  // Monte Carlo
-  const dailyReturns = [];
-  for (let i = 1; i < closes.length; i++) {
-    if (closes[i-1] > 0) dailyReturns.push(Math.log(closes[i] / closes[i-1]));
-  }
-  const avgRet = dailyReturns.reduce((a,b) => a+b, 0) / dailyReturns.length;
-  const variance = dailyReturns.reduce((a,b) => a + Math.pow(b - avgRet, 2), 0) / dailyReturns.length;
-  const dailyVol = Math.sqrt(variance);
-  const mc = monteCarloSim(lastPrice, dailyVol, 10, 500);
+  const sr = calcSupportResistance(highs, lows, 3).slice(0, 6);
 
-  // Build prediction x-axis labels
-  const lastDateObj = new Date(lastDate);
-  const predDates = [];
-  for (let i = 1; i <= 10; i++) {
-    const d = new Date(lastDateObj);
-    d.setDate(d.getDate() + i);
-    // Skip weekends
-    if (d.getDay() === 0) d.setDate(d.getDate() + 1);
-    if (d.getDay() === 6) d.setDate(d.getDate() + 2);
-    const ds = d.toISOString().slice(0, 10);
-    predDates.push(ds);
-  }
+  const logRets = []; for (let i = 1; i < n; i++) if (closes[i-1]>0) logRets.push(Math.log(closes[i]/closes[i-1]));
+  const mc = calcMonteCarlo(lastPrice, logRets, 20, 1000);
+  const avgRet = logRets.reduce((a,b)=>a+b,0)/logRets.length;
+  const dailyVol = Math.sqrt(logRets.reduce((a,b)=>a+Math.pow(b-avgRet,2),0)/logRets.length);
+
+  const lastD = new Date(lastDate), predDates = [];
+  for (let i = 1; i <= 20; i++) { const d = new Date(lastD); d.setDate(d.getDate()+i); if (d.getDay()===0) d.setDate(d.getDate()+1); if (d.getDay()===6) d.setDate(d.getDate()+2); predDates.push(d.toISOString().slice(0,10)); }
   const allDates = [...dates, ...predDates];
 
-  // Regression line (full length)
-  const regFull = [];
-  for (let i = 0; i < dates.length - N; i++) regFull.push(null);
-  for (let i = 0; i < reg.line.length; i++) regFull.push(reg.line[i]);
-
-  // MC cone on prediction dates
-  const mcUpper = []; const mcLower = [];
-  for (let i = 0; i < dates.length; i++) { mcUpper.push(null); mcLower.push(null); }
-  mcUpper.push(lastPrice); mcLower.push(lastPrice);
-  const mcPrices = [lastPrice];
-  for (let d = 1; d <= 10; d++) {
-    const drift = Math.exp(avgRet * d);
-    const vol = Math.exp(dailyVol * Math.sqrt(d) * 1.28); // 80% CI
-    const upper = lastPrice * drift * vol;
-    const lower = lastPrice * drift / vol;
-    mcUpper.push(+upper.toFixed(2));
-    mcLower.push(+lower.toFixed(2));
+  const mcP50 = [], mcP05 = [], mcP95 = [];
+  for (let i = 0; i < n; i++) { mcP50.push(null); mcP05.push(null); mcP95.push(null); }
+  mcP50.push(lastPrice); mcP05.push(lastPrice); mcP95.push(lastPrice);
+  for (let d = 1; d <= 20; d++) {
+    const drift = Math.exp(avgRet*d), vt = dailyVol*Math.sqrt(d);
+    mcP50.push(+(lastPrice*drift).toFixed(2));
+    mcP05.push(+(lastPrice*drift*Math.exp(-1.645*vt)).toFixed(2));
+    mcP95.push(+(lastPrice*drift*Math.exp(1.645*vt)).toFixed(2));
   }
 
-  // Buy/Sell signal detection based on MA cross + Bollinger
-  const signals = [];
-  for (let i = 20; i < ohlc.length; i++) {
-    if (ma5[i] && ma10[i] && ma5[i-1] && ma10[i-1]) {
-      if (ma5[i-1] <= ma10[i-1] && ma5[i] > ma10[i]) {
-        signals.push({ coord: [dates[i], closes[i]], value: 'BUY', itemStyle: { color: '#22c55e' } });
-      }
-      if (ma5[i-1] >= ma10[i-1] && ma5[i] < ma10[i]) {
-        signals.push({ coord: [dates[i], closes[i]], value: 'SELL', itemStyle: { color: '#ef4444' } });
-      }
-    }
-    // Bollinger break
-    if (bb.lower[i] && closes[i] < bb.lower[i]) {
-      signals.push({ coord: [dates[i], closes[i]*0.97], value: '超卖', itemStyle: { color: '#f59e0b' } });
-    }
-    if (bb.upper[i] && closes[i] > bb.upper[i]) {
-      signals.push({ coord: [dates[i], closes[i]*1.03], value: '超买', itemStyle: { color: '#06b6d4' } });
-    }
-  }
-  const recentSignals = signals.filter(s => s.coord[0] >= dates[dates.length - 30]);
+  const srMarkLines = sr.map(p => ({ name: 'S/R '+currency+p.toFixed(2), yAxis: p }));
 
-  // Candlestick chart with predictions
   const mainChart = echarts.init(document.getElementById('echart-main'), 'dark');
   mainChart.setOption({
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-    legend: { data: ['K线','MA5','MA10','MA20','布林上轨','布林中轨','布林下轨','回归趋势','预测上界','预测下界'],
-      textStyle: { color: '#94a3b8', fontSize: 10 }, top: 0, itemWidth: 14, itemHeight: 8 },
-    grid: { left: '8%', right: '3%', top: '8%', bottom: '5%' },
+    legend: { type: 'scroll', data: ['K线','MA5/10/20','布林带','一目云','MC50','MC90%锥'],
+      textStyle: { color: '#94a3b8', fontSize: 9 }, top: 0, itemWidth: 12, itemHeight: 7 },
+    grid: { left: '8%', right: '3%', top: '10%', bottom: '5%' },
     xAxis: { type: 'category', data: allDates, axisLabel: { color: '#94a3b8', fontSize: 9, formatter: v => v.slice(5) }, axisLine: { lineStyle: { color: '#334155' } } },
     yAxis: { type: 'value', scale: true, axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
     series: [
-      { name: 'K线', type: 'candlestick', data: ohlcData, itemStyle: { color: '#22c55e', color0: '#ef4444', borderColor: '#22c55e', borderColor0: '#ef4444' }, z: 3 },
-      { name: '布林上轨', type: 'line', data: bb.upper, lineStyle: { width: 1, color: 'rgba(34,197,94,0.4)' }, symbol: 'none', z: 1 },
-      { name: '布林中轨', type: 'line', data: bb.mid, lineStyle: { width: 1, color: 'rgba(245,158,11,0.5)' }, symbol: 'none', z: 1 },
-      { name: '布林下轨', type: 'line', data: bb.lower, lineStyle: { width: 1, color: 'rgba(239,68,68,0.4)' }, symbol: 'none', z: 1,
-        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [{ offset: 0, color: 'rgba(239,68,68,0.05)' }, { offset: 1, color: 'rgba(34,197,94,0.05)' }] } } },
-      { name: 'MA5', type: 'line', data: ma5, smooth: true, lineStyle: { width: 1, color: '#f59e0b' }, symbol: 'none', z: 2 },
-      { name: 'MA10', type: 'line', data: ma10, smooth: true, lineStyle: { width: 1, color: '#3b82f6' }, symbol: 'none', z: 2 },
-      { name: 'MA20', type: 'line', data: ma20, smooth: true, lineStyle: { width: 1, color: '#a855f7' }, symbol: 'none', z: 2 },
-      { name: '回归趋势', type: 'line', data: regFull, lineStyle: { width: 2, color: '#f97316', type: 'dashed' }, symbol: 'none', z: 4 },
-      { name: '预测上界', type: 'line', data: mcUpper, lineStyle: { width: 1, color: 'rgba(34,197,94,0.6)', type: 'dotted' }, symbol: 'none', z: 4,
-        areaStyle: { color: 'rgba(34,197,94,0.08)' } },
-      { name: '预测下界', type: 'line', data: mcLower, lineStyle: { width: 1, color: 'rgba(239,68,68,0.6)', type: 'dotted' }, symbol: 'none', z: 4 },
-      { name: '信号', type: 'scatter', data: recentSignals, symbolSize: 12,
-        label: { show: true, formatter: p => p.value, fontSize: 9, color: '#fff', fontWeight: 'bold' } },
+      { name: '一目云', type: 'line', data: ichi.spanA, lineStyle: { opacity: 0 }, symbol: 'none', areaStyle: { color: 'rgba(239,68,68,0.06)' }, stack: 'cloud', z: 0 },
+      { name: '', type: 'line', data: ichi.spanB, lineStyle: { opacity: 0 }, symbol: 'none', areaStyle: { color: 'rgba(34,197,94,0.04)' }, stack: 'cloud', z: 0 },
+      { name: 'MC90%锥', type: 'line', data: mcP95, lineStyle: { width: 0.5, color: 'rgba(239,68,68,0.3)', type: 'dotted' }, symbol: 'none', z: 1, areaStyle: { color: 'rgba(239,68,68,0.03)' } },
+      { name: '', type: 'line', data: mcP05, lineStyle: { width: 0.5, color: 'rgba(34,197,94,0.3)', type: 'dotted' }, symbol: 'none', z: 1 },
+      { name: 'MC50', type: 'line', data: mcP50, lineStyle: { width: 2, color: '#06b6d4', type: 'dashed' }, symbol: 'none', z: 2 },
+      { name: '布林带', type: 'line', data: bb.upper, lineStyle: { width: 1, color: 'rgba(245,158,11,0.4)' }, symbol: 'none', z: 1 },
+      { name: '', type: 'line', data: bb.mid, lineStyle: { width: 1, color: 'rgba(245,158,11,0.6)' }, symbol: 'none', z: 1 },
+      { name: '', type: 'line', data: bb.lower, lineStyle: { width: 1, color: 'rgba(245,158,11,0.4)' }, symbol: 'none', z: 1 },
+      { name: 'K线', type: 'candlestick', data: ohlcData, itemStyle: { color: '#ef4444', color0: '#22c55e', borderColor: '#ef4444', borderColor0: '#22c55e' }, z: 5,
+        markLine: { silent: true, symbol: 'none', lineStyle: { type: 'dashed', color: '#f59e0b', width: 0.8, opacity: 0.6 }, label: { fontSize: 9, color: '#f59e0b', formatter: p => p.name }, data: [...fibMarkLines, ...srMarkLines] } },
+      { name: 'MA5/10/20', type: 'line', data: ma5, smooth: true, lineStyle: { width: 1, color: '#f59e0b' }, symbol: 'none', z: 3 },
+      { name: '', type: 'line', data: ma10, smooth: true, lineStyle: { width: 1, color: '#3b82f6' }, symbol: 'none', z: 3 },
+      { name: '', type: 'line', data: ma20, smooth: true, lineStyle: { width: 1, color: '#a855f7' }, symbol: 'none', z: 3 },
     ]
   });
 
-  // Volume chart (unchanged)
   const volChart = echarts.init(document.getElementById('echart-vol'), 'dark');
   volChart.setOption({
     grid: { left: '8%', right: '3%', top: '5%', bottom: '5%' },
     xAxis: { type: 'category', data: dates, axisLabel: { show: false }, axisLine: { show: false }, axisTick: { show: false } },
-    yAxis: { type: 'value', axisLabel: { color: '#94a3b8', fontSize: 9, formatter: v => v > 1e6 ? (v/1e6).toFixed(0)+'M' : (v/1e3).toFixed(0)+'K' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
-    series: [{
-      name: '成交量', type: 'bar', data: volumes.map((v, i) => ohlc[i][2] >= ohlc[i][1] ? v : -v),
-      itemStyle: { color: v => v > 0 ? 'rgba(34,197,94,0.6)' : 'rgba(239,68,68,0.6)' }
-    }]
+    yAxis: { type: 'value', axisLabel: { color: '#94a3b8', fontSize: 9, formatter: v => v>1e6?(v/1e6).toFixed(0)+'M':(v/1e3).toFixed(0)+'K' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
+    series: [{ name: '成交量', type: 'bar', data: volumes.map((v,i) => ohlc[i][2]>=ohlc[i][1]?v:-v), itemStyle: { color: v => v>0?'rgba(239,68,68,0.6)':'rgba(34,197,94,0.6)' } }]
   });
+  mainChart.group = 'stockGroup'; volChart.group = 'stockGroup'; echarts.connect('stockGroup');
 
-  mainChart.group = 'stockGroup'; volChart.group = 'stockGroup';
-  echarts.connect('stockGroup');
-
-  // Prediction summary
-  const trend = reg.slope > 0.001 ? '📈 看涨' : reg.slope < -0.001 ? '📉 看跌' : '📊 震荡';
-  const lastBB = bb.lower[bb.lower.length-1] && lastPrice < bb.lower[bb.lower.length-1] ? ' (超卖区)' : '';
-  const lastBBu = bb.upper[bb.upper.length-1] && lastPrice > bb.upper[bb.upper.length-1] ? ' (超买区)' : '';
+  const srTxt = sr.slice(0,4).map(l=>currency+l.toFixed(2)).join(' / ');
   document.getElementById('prediction-summary').innerHTML = '' +
-    '<strong>🔮 走势预测:</strong> 线性回归趋势 <span style="color:' + (reg.slope>0?'#22c55e':'#ef4444') + '">' + trend + '</span> | ' +
-    '10日后预测中位数 <strong>$' + mc.p50.toFixed(2) + '</strong> (80%置信区间: $' + mc.p10.toFixed(2) + ' ~ $' + mc.p90.toFixed(2) + ') | ' +
-    '布林带位置: ' + lastPrice.toFixed(2) + lastBB + lastBBu + ' | ' +
-    '日波动率: ' + (dailyVol*100).toFixed(2) + '% | ' +
-    '<span style="font-size:10px;color:var(--muted)">仅供参考，不构成投资建议</span>';
+    '<strong>🔮 多维度预测:</strong> ' +
+    '<span style="color:#06b6d4">MC中位数(20日): ' + currency + mc.p50.toFixed(2) + '</span> | ' +
+    '90%置信: ' + currency + mc.p05.toFixed(2) + ' ~ ' + currency + mc.p95.toFixed(2) + ' | ' +
+    '斐波那契50%: ' + currency + fib[0.5].toFixed(2) + ' | ' +
+    '关键支撑/阻力: ' + srTxt + ' | ' +
+    '<span style="font-size:10px;color:var(--muted)">仅供参考</span>';
 }
 
 function closeModal() {
@@ -689,10 +907,10 @@ async function runBacktest() {
   document.getElementById('btResult').innerHTML = '<h3>📋 回测结果</h3><p style="color:var(--muted)">⏳ 正在计算...</p>';
 
   try {
-    const resp = await fetch('/api/backtest', {
+    const resp = await fetch(apiBase('/backtest'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ symbol, strategy, params })
+      body: JSON.stringify({ symbol, strategy, params, market })
     });
     const data = await resp.json();
     if (data.error) {
@@ -721,11 +939,11 @@ async function runBacktest() {
 
 async function loadBacktestHistory() {
   try {
-    const resp = await fetch('/api/backtest/history?limit=10');
+    const resp = await fetch(apiBase('/backtest/history?limit=10'));
     const data = await resp.json();
     let html = '';
     for (const r of data) {
-      const cls = r.total_return >= 0 ? 'color:var(--green)' : 'color:var(--red)';
+      const cls = r.total_return >= 0 ? 'color:var(--red)' : 'color:var(--green)';
       html += `<tr>
         <td style="padding:6px 8px;font-size:11px;color:var(--muted);border-bottom:1px solid rgba(255,255,255,.04)">${(r.created_at||'').slice(0,16)}</td>
         <td style="padding:6px 8px;font-size:13px;border-bottom:1px solid rgba(255,255,255,.04)"><strong>${r.symbol}</strong></td>
@@ -740,28 +958,61 @@ async function loadBacktestHistory() {
 }
 
 // ── Bubble Chart ──
+// 五行分类：木(生发)→火(热烈)→土(承载)→金(收敛)→水(流动)
+const WUXING_ORDER = [
+  '科技',      // 木 - 生发创新
+  '医疗健康',  // 木 - 生命成长
+  '能源',      // 火 - 热烈能源
+  '通信服务',  // 火 - 信息传播(离为光明)
+  '工业',      // 土 - 稳定实业
+  '房地产',    // 土 - 土地承载
+  '消费品',    // 土 - 生活根基
+  '金融',      // 金 - 财富收敛
+  '基础材料',  // 金 - 金属坚硬
+  '公用事业',  // 水 - 流动下行
+  '全球'       // 水 - 海纳百川
+];
+const WUXING_META = {
+  '科技':      { wu: '木', color: '#22c55e', desc: '生发·创新' },
+  '医疗健康':  { wu: '木', color: '#22c55e', desc: '生长·生命' },
+  '能源':      { wu: '火', color: '#ef4444', desc: '热烈·能源' },
+  '通信服务':  { wu: '火', color: '#ef4444', desc: '光明·传播' },
+  '工业':      { wu: '土', color: '#f59e0b', desc: '承载·制造' },
+  '房地产':    { wu: '土', color: '#f59e0b', desc: '稳定·土地' },
+  '消费品':    { wu: '土', color: '#f59e0b', desc: '根基·生活' },
+  '金融':      { wu: '金', color: '#e2e8f0', desc: '收敛·财富' },
+  '基础材料':  { wu: '金', color: '#e2e8f0', desc: '坚硬·金属' },
+  '公用事业':  { wu: '水', color: '#3b82f6', desc: '流动·下行' },
+  '全球':      { wu: '水', color: '#3b82f6', desc: '包容·全球' },
+};
+
+// 基于symbol的固定哈希，保证每次刷新同一板块位置不变
+function stableHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h) + str.charCodeAt(i);
+    h |= 0;
+  }
+  return (Math.abs(h) % 1000) / 1000; // 0~0.999
+}
+
 function renderBubbleChart() {
   const sub = allSectors.filter(s => s.category !== '指数');
   if (sub.length === 0) { loadDashboard(); return; }
 
   document.getElementById('bubbleDate').textContent = '数据日期: ' + (document.getElementById('dateLabel')?.textContent || '');
 
-  // Group sectors by category for x-axis positioning
+  // 动态生成分类（支持美股和A股不同的分类体系）
   const cats = [...new Set(sub.map(s => s.category))];
-  const catColors = {
-    '科技':'#3b82f6','金融':'#f59e0b','医疗健康':'#22c55e','能源':'#ef4444',
-    '工业':'#8b5cf6','消费品':'#ec4899','房地产':'#06b6d4','通信服务':'#f97316',
-    '基础材料':'#84cc16','公用事业':'#6366f1','全球':'#e11d48'
-  };
+  const totalCats = cats.length;
 
-  // Build datasets
-  const datasets = [];
   const maxVol = Math.max(...sub.map(s => s.volume || 0), 1);
 
-  // Each sector is a bubble
   const bubbles = sub.map(s => {
     const catIdx = cats.indexOf(s.category);
-    const xJitter = (Math.random() - 0.5) * 0.4; // small horizontal jitter within category
+    // 用基于symbol的固定偏移替代随机数，保证刷新后位置不变
+    const hash = stableHash(s.symbol);
+    const xJitter = (hash - 0.5) * 0.35; // ±0.175 的固定偏移
     const bubbleR = Math.max(5, Math.sqrt((s.volume || 1) / maxVol) * 40);
     return {
       x: catIdx + xJitter,
@@ -789,15 +1040,15 @@ function renderBubbleChart() {
         {
           label: '📈 上涨板块',
           data: greenBubbles,
-          backgroundColor: greenBubbles.map(() => 'rgba(34,197,94,0.7)'),
-          borderColor: greenBubbles.map(() => '#22c55e'),
+          backgroundColor: greenBubbles.map(() => 'rgba(239,68,68,0.7)'),
+          borderColor: greenBubbles.map(() => '#ef4444'),
           borderWidth: 1.5,
         },
         {
           label: '📉 下跌板块',
           data: redBubbles,
-          backgroundColor: redBubbles.map(() => 'rgba(239,68,68,0.7)'),
-          borderColor: redBubbles.map(() => '#ef4444'),
+          backgroundColor: redBubbles.map(() => 'rgba(34,197,94,0.7)'),
+          borderColor: redBubbles.map(() => '#22c55e'),
           borderWidth: 1.5,
         }
       ]
@@ -813,9 +1064,9 @@ function renderBubbleChart() {
               const sign = b.change >= 0 ? '+' : '';
               const vol = b.volume ? (b.volume/1e6).toFixed(1)+'M' : '';
               return [
-                b.symbol + ' ' + b.name,
+                b.symbol + ' ' + b.name + ' [' + b.category + ']',
                 '涨跌: ' + sign + b.change.toFixed(2) + '%',
-                '价格: $' + b.close.toFixed(2),
+                '价格: ' + (market==='cn'?'¥':'$') + b.close.toFixed(2),
                 '成交量: ' + vol
               ];
             }
@@ -825,15 +1076,20 @@ function renderBubbleChart() {
       },
       scales: {
         x: {
-          title: { display: true, text: '板块分类', color: '#94a3b8' },
+          title: { display: true, text: '板块分类', color: '#94a3b8', font: { size: 13 } },
           ticks: {
-            callback: v => cats[Math.round(v)] || '',
+            callback: v => {
+              const idx = Math.round(v);
+              return cats[idx] || '';
+            },
             color: '#94a3b8',
-            font: { size: 11 }
+            font: { size: 11, weight: 'bold' },
+            maxRotation: 30,
+            minRotation: 30
           },
           grid: { color: 'rgba(255,255,255,0.05)' },
           min: -0.5,
-          max: cats.length - 0.5,
+          max: totalCats - 0.5,
         },
         y: {
           title: { display: true, text: '涨跌幅 (%)', color: '#94a3b8' },
@@ -851,6 +1107,8 @@ function renderBubbleChart() {
         const { ctx, scales: { x, y } } = chart;
         const yZero = y.getPixelForValue(0);
         ctx.save();
+
+        // 涨跌分界线
         ctx.strokeStyle = 'rgba(255,255,255,0.4)';
         ctx.lineWidth = 2;
         ctx.setLineDash([8, 4]);
@@ -858,26 +1116,462 @@ function renderBubbleChart() {
         ctx.moveTo(x.left, yZero);
         ctx.lineTo(x.right, yZero);
         ctx.stroke();
-        // Add "分界线" label
+        ctx.setLineDash([]);
+
         ctx.fillStyle = '#94a3b8';
         ctx.font = '11px Microsoft YaHei';
-        ctx.fillText('── 涨跌分界线 ──', x.right - 140, yZero - 6);
-        ctx.setLineDash([]);
+        ctx.textAlign = 'right';
+        ctx.fillText('── 涨跌分界线 ──', x.right - 10, yZero - 6);
+
         ctx.restore();
       }
     }]
   });
 }
 
-function navigateToLatest() {
-  loadDashboard();
-  document.getElementById('selectedDateLabel').textContent = allDates[allDates.length-1] || '最新';
+// ── Keyboard Shortcuts ──
+document.addEventListener('keydown', function(e) {
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  if (e.key === 'ArrowLeft') { e.preventDefault(); navigateDate(-1); }
+  else if (e.key === 'ArrowRight') { e.preventDefault(); navigateDate(1); }
+  else if (e.key === 'Home') { e.preventDefault(); navigateToLatest(); }
+});
+
+// ── Macro Indicators ──
+async function loadMacro() {
+  try {
+    const resp = await fetch(apiBase('/macro'));
+    const d = await resp.json();
+    if (!d.vix && !d.dxy && !d.tnx) return;
+    const fmt = (v, p) => {
+      if (v == null) return '-';
+      const chg = v - p;
+      const cls = chg >= 0 ? 'up' : 'down';
+      const sign = chg >= 0 ? '+' : '';
+      return `<span class="${cls}">${v.toFixed(2)} ${sign}${chg.toFixed(2)}</span>`;
+    };
+    const volTxt = d.spy_volume_ratio ? `${d.spy_volume_ratio >= 0 ? '+' : ''}${d.spy_volume_ratio}% vs 20日均量` : '';
+    document.getElementById('macroCards').innerHTML = `
+      <div class="card"><div class="lbl">😰 VIX 恐慌指数</div><div class="val">${fmt(d.vix, d.vix_prev)}</div></div>
+      <div class="card"><div class="lbl">💵 美元指数 DXY</div><div class="val">${fmt(d.dxy, d.dxy_prev)}</div></div>
+      <div class="card"><div class="lbl">📉 10Y 美债收益率</div><div class="val">${fmt(d.tnx, d.tnx_prev)}%</div></div>
+      <div class="card"><div class="lbl">📊 SPY 成交量</div><div class="val">${d.spy_volume ? (d.spy_volume/1e6).toFixed(1)+'M' : '-'}</div><div class="sub">${volTxt}</div></div>
+    `;
+    document.getElementById('macroCards').style.display = 'grid';
+  } catch(e) {}
+}
+
+// ── Watchlist / Favorites ──
+function getWatchlist() {
+  try { return JSON.parse(localStorage.getItem('sector_watchlist') || '[]'); } catch(e) { return []; }
+}
+function toggleWatch(symbol) {
+  const list = getWatchlist();
+  const idx = list.indexOf(symbol);
+  if (idx >= 0) list.splice(idx, 1); else list.push(symbol);
+  localStorage.setItem('sector_watchlist', JSON.stringify(list));
+  renderCategories(allSectors);
+  showToast(idx >= 0 ? '已取消关注' : '已添加关注');
+}
+function isWatched(symbol) { return getWatchlist().includes(symbol); }
+
+// ── Rotation Heatmap ──
+async function renderRotationChart() {
+  const el = document.getElementById('rotationChart');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">⏳ 加载中...</div>';
+  try {
+    console.log('[Rotation] fetching', apiBase('/rotation'));
+    const resp = await fetch(apiBase('/rotation'));
+    const data = await resp.json();
+    console.log('[Rotation] response', data.error || ('sectors=' + (data.sectors||[]).length));
+    if (data.error) {
+      el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">📭 该市场板块轮动数据暂未生成，请稍后再试<br><span style="font-size:12px">原因: ' + data.error + '</span></div>';
+      return;
+    }
+    const sectors = data.sectors || [];
+    if (sectors.length === 0) {
+      el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">📭 暂无板块轮动数据</div>';
+      return;
+    }
+    sectors.sort((a, b) => {
+      const ca = a.category || '';
+      const cb = b.category || '';
+      const ci = ca.localeCompare(cb);
+      if (ci !== 0) return ci;
+      return (b.d60 || -999) - (a.d60 || -999);
+    });
+    const xLabels = ['1日', '5日', '20日', '60日'];
+    const yLabels = sectors.map(s => (s.name || '') + ' (' + (s.category || '') + ')');
+    const heatmapData = [];
+    for (let i = 0; i < sectors.length; i++) {
+      for (let j = 0; j < 4; j++) {
+        const v = [sectors[i].d1, sectors[i].d5, sectors[i].d20, sectors[i].d60][j];
+        const num = (v === null || v === undefined || isNaN(v)) ? null : +v.toFixed(2);
+        heatmapData.push([j, i, num]);
+      }
+    }
+    console.log('[Rotation] rendering', heatmapData.length, 'cells');
+    if (window._rotChart) { window._rotChart.dispose(); window._rotChart = null; }
+    const chart = echarts.init(el, 'dark');
+    window._rotChart = chart;
+
+    const showLabel = sectors.length <= 40;
+    const fontSize = sectors.length <= 25 ? 13 : 11;
+    const axisFontSize = sectors.length <= 25 ? 14 : 12;
+
+    chart.setOption({
+      tooltip: {
+        position: 'top',
+        backgroundColor: 'rgba(30,41,59,0.95)',
+        borderColor: '#334155',
+        textStyle: { fontSize: 14, color: '#e2e8f0' },
+        formatter: p => {
+          const v = p.data[2];
+          const color = v > 0 ? '#ef4444' : v < 0 ? '#22c55e' : '#94a3b8';
+          return yLabels[p.data[1]] + '<br>' + xLabels[p.data[0]] + ': ' +
+            '<span style="color:' + color + ';font-weight:700">' + (v != null ? v + '%' : '无数据') + '</span>';
+        }
+      },
+      grid: { top: 30, bottom: 80, left: 180, right: 60 },
+      xAxis: {
+        type: 'category', data: xLabels,
+        axisLabel: { color: '#e2e8f0', fontSize: axisFontSize, fontWeight: 'bold', margin: 14 },
+        axisLine: { lineStyle: { color: '#334155' } },
+        splitArea: { show: true }
+      },
+      yAxis: {
+        type: 'category', data: yLabels,
+        axisLabel: { color: '#e2e8f0', fontSize: axisFontSize, margin: 12 },
+        axisLine: { lineStyle: { color: '#334155' } },
+        inverse: true,
+        splitArea: { show: true }
+      },
+      visualMap: {
+        min: -12, max: 12, calculable: true, orient: 'horizontal', left: 'center', bottom: 10,
+        text: ['强势 +12%', '弱势 -12%'], textStyle: { color: '#e2e8f0', fontSize: 13 },
+        inRange: { color: ['#22c55e', '#f59e0b', '#1e293b', '#ef4444'] },
+        itemWidth: 20, itemHeight: 12
+      },
+      series: [{
+        name: '涨跌幅', type: 'heatmap', data: heatmapData,
+        label: { show: showLabel, fontSize: fontSize, fontWeight: 'bold', color: '#fff', formatter: p => p.data[2] != null ? p.data[2] + '%' : '' },
+        itemStyle: { borderColor: '#1e293b', borderWidth: 1, borderRadius: 4 },
+        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } }
+      }]
+    });
+    console.log('[Rotation] rendered ok');
+  } catch(e) {
+    console.error('[Rotation] error', e);
+    el.innerHTML = '<div style="text-align:center;padding-top:180px;color:var(--red)">❌ 图表渲染失败: ' + e.message + '<br><span style="color:var(--muted);font-size:12px">请按 F12 打开控制台查看详细报错</span></div>';
+  }
+}
+
+// ── Correlation Matrix ──
+async function renderCorrelationChart() {
+  const el = document.getElementById('correlationChart');
+  if (!el) return;
+  el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">⏳ 加载中...</div>';
+  try {
+    console.log('[Correlation] fetching', apiBase('/correlation'));
+    const resp = await fetch(apiBase('/correlation'));
+    const data = await resp.json();
+    console.log('[Correlation] response', data.error || ('names=' + (data.names||[]).length));
+    if (data.error) {
+      el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">📭 该市场相关性矩阵数据暂未生成，请稍后再试<br><span style="font-size:12px">原因: ' + data.error + '</span></div>';
+      return;
+    }
+    const names = data.names || [];
+    const matrix = data.matrix || [];
+    if (names.length === 0) {
+      el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">📭 暂无相关性数据</div>';
+      return;
+    }
+    // Validate matrix dimensions
+    if (!Array.isArray(matrix) || matrix.length !== names.length) {
+      console.error('[Correlation] matrix dimension mismatch', matrix.length, 'vs', names.length);
+      el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--red)">❌ 数据格式错误: 矩阵维度不匹配</div>';
+      return;
+    }
+    const heatData = [];
+    for (let i = 0; i < names.length; i++) {
+      if (!Array.isArray(matrix[i]) || matrix[i].length !== names.length) {
+        console.error('[Correlation] matrix row invalid at', i, matrix[i]);
+        el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--red)">❌ 数据格式错误: 矩阵行数据不完整</div>';
+        return;
+      }
+      for (let j = 0; j < names.length; j++) {
+        const v = matrix[i][j];
+        const num = (v === null || v === undefined || isNaN(v)) ? 0 : +v;
+        heatData.push([j, i, num]);
+      }
+    }
+    console.log('[Correlation] rendering', names.length, 'x', names.length, 'cells=', heatData.length);
+    if (window._corrChart) { window._corrChart.dispose(); window._corrChart = null; }
+    const chart = echarts.init(el, 'dark');
+    window._corrChart = chart;
+
+    // Adjust label visibility based on density
+    const showLabel = names.length <= 35;
+    const fontSize = names.length <= 20 ? 12 : (names.length <= 30 ? 10 : 9);
+    const axisFontSize = names.length <= 20 ? 13 : 11;
+    const rotate = names.length > 25 ? 45 : 35;
+
+    chart.setOption({
+      tooltip: {
+        position: 'top',
+        backgroundColor: 'rgba(30,41,59,0.95)',
+        borderColor: '#334155',
+        textStyle: { fontSize: 14, color: '#e2e8f0' },
+        formatter: p => {
+          const v = p.data[2];
+          const color = v > 0 ? '#ef4444' : v < 0 ? '#22c55e' : '#94a3b8';
+          return names[p.data[1]] + ' ↔ ' + names[p.data[0]] + '<br>相关系数: ' +
+            '<span style="color:' + color + ';font-weight:700">' + v.toFixed(2) + '</span>';
+        }
+      },
+      grid: { top: 30, bottom: 80, left: 160, right: 60 },
+      xAxis: {
+        type: 'category', data: names,
+        axisLabel: { color: '#e2e8f0', fontSize: axisFontSize, fontWeight: 'bold', rotate: rotate, margin: 14 },
+        axisLine: { lineStyle: { color: '#334155' } },
+        splitArea: { show: true }
+      },
+      yAxis: {
+        type: 'category', data: names,
+        axisLabel: { color: '#e2e8f0', fontSize: axisFontSize, margin: 12 },
+        axisLine: { lineStyle: { color: '#334155' } },
+        inverse: true,
+        splitArea: { show: true }
+      },
+      visualMap: {
+        min: -1, max: 1, calculable: true, orient: 'horizontal', left: 'center', bottom: 10,
+        text: ['正相关 +1', '负相关 -1'], textStyle: { color: '#e2e8f0', fontSize: 13 },
+        inRange: { color: ['#22c55e', '#f59e0b', '#1e293b', '#ef4444'] },
+        itemWidth: 20, itemHeight: 12
+      },
+      series: [{
+        name: '相关系数', type: 'heatmap', data: heatData,
+        label: { show: showLabel, fontSize: fontSize, fontWeight: 'bold', color: '#fff', formatter: p => p.data[2].toFixed(2) },
+        itemStyle: { borderColor: '#1e293b', borderWidth: 1, borderRadius: 4 },
+        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } }
+      }]
+    });
+    console.log('[Correlation] rendered ok');
+  } catch(e) {
+    console.error('[Correlation] error', e);
+    el.innerHTML = '<div style="text-align:center;padding-top:180px;color:var(--red)">❌ 图表渲染失败: ' + e.message + '<br><span style="color:var(--muted);font-size:12px">请按 F12 打开控制台查看详细报错</span></div>';
+  }
+}
+
+// ── Backtest Visualization & Optimization ──
+let btRawData = null;
+
+async function runBacktest() {
+  const symbol = document.getElementById('btSymbol').value.toUpperCase();
+  const strategy = document.getElementById('btStrategy').value;
+  const params = {};
+  if (strategy === 'ma_cross') {
+    params.fast = parseInt(document.getElementById('pFast')?.value || 5);
+    params.slow = parseInt(document.getElementById('pSlow')?.value || 20);
+  } else if (strategy === 'rsi') {
+    params.period = parseInt(document.getElementById('pPeriod')?.value || 14);
+    params.oversold = parseInt(document.getElementById('pOversold')?.value || 30);
+    params.overbought = parseInt(document.getElementById('pOverbought')?.value || 70);
+  } else if (strategy === 'momentum' || strategy === 'sector_rotation') {
+    params.lookback = parseInt(document.getElementById('pLookback')?.value || 20);
+  }
+
+  document.getElementById('btResult').innerHTML = '<h3>📋 回测结果</h3><p style="color:var(--muted)">⏳ 正在计算...</p>';
+  document.getElementById('btChartBox').style.display = 'none';
+
+  try {
+    const resp = await fetch(apiBase('/backtest'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ symbol, strategy, params, market })
+    });
+    const data = await resp.json();
+    btRawData = data;
+    renderBacktestResult(data);
+  } catch(e) {
+    document.getElementById('btResult').innerHTML = '<h3>📋 回测结果</h3><p style="color:var(--red)">❌ 网络请求失败</p>';
+  }
+}
+
+function renderBacktestResult(data) {
+  if (data.error) {
+    document.getElementById('btResult').innerHTML = '<h3>📋 回测结果</h3><p style="color:var(--red)">❌ ' + data.error + '</p>';
+    return;
+  }
+  const cls = data.total_return >= 0 ? 'up' : 'down';
+  const bhc = data.buy_hold_return >= 0 ? 'up' : 'down';
+  document.getElementById('btResult').innerHTML = `
+    <h3 style="margin-bottom:16px">📋 回测结果 — ${data.symbol} (${data.strategy})</h3>
+    <div class="metric-grid">
+      <div class="metric"><div class="ml">策略收益率</div><div class="mv ${cls}">${data.total_return>=0?'+':''}${data.total_return}%</div></div>
+      <div class="metric"><div class="ml">买入持有</div><div class="mv ${bhc}">${data.buy_hold_return>=0?'+':''}${data.buy_hold_return}%</div></div>
+      <div class="metric"><div class="ml">夏普比率</div><div class="mv" style="color:var(--accent)">${data.sharpe}</div></div>
+      <div class="metric"><div class="ml">最大回撤</div><div class="mv" style="color:var(--red)">-${data.max_drawdown}%</div></div>
+      <div class="metric"><div class="ml">胜率</div><div class="mv">${data.win_rate}%</div></div>
+      <div class="metric"><div class="ml">交易次数</div><div class="mv">${data.trades}</div></div>
+    </div>`;
+  document.getElementById('btMeta').textContent = `参数: ${JSON.stringify(data.params)} | 策略跑赢买入持有: ${data.total_return > data.buy_hold_return ? '✅ 是' : '❌ 否'}`;
+  document.getElementById('btChartBox').style.display = 'block';
+  renderBacktestChart(data);
+  loadBacktestHistory();
+}
+
+function renderBacktestChart(data) {
+  const el = document.getElementById('backtestChart');
+  if (!el || !data.equity_curve) return;
+  const chart = echarts.init(el, 'dark');
+  const dates = [];
+  for (let i = 0; i < data.equity_curve.length; i++) dates.push('Day ' + (i+1));
+  const buyHoldCurve = [];
+  // approximate buy-hold curve normalized
+  const startPrice = 100, endPrice = startPrice * (1 + data.buy_hold_return/100);
+  for (let i = 0; i < data.equity_curve.length; i++) {
+    buyHoldCurve.push(startPrice + (endPrice - startPrice) * (i / (data.equity_curve.length - 1)));
+  }
+  const tradeMarks = (data.trade_list || []).map(t => ({
+    xAxis: t.index,
+    label: { formatter: t.signal > 0 ? '买入' : '卖出', fontSize: 9, color: t.signal > 0 ? '#ef4444' : '#22c55e' },
+    lineStyle: { color: t.signal > 0 ? '#ef4444' : '#22c55e', type: 'dashed' }
+  }));
+  chart.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['策略资金曲线', '买入持有'], textStyle: { color: '#94a3b8' } },
+    grid: { left: '8%', right: '4%', top: '10%', bottom: '10%' },
+    xAxis: { type: 'category', data: dates, axisLabel: { show: false }, axisLine: { lineStyle: { color: '#334155' } } },
+    yAxis: { type: 'value', axisLabel: { color: '#94a3b8' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
+    series: [
+      { name: '策略资金曲线', type: 'line', data: data.equity_curve.map(v => v * 100), smooth: true, lineStyle: { width: 2, color: '#06b6d4' }, symbol: 'none' },
+      { name: '买入持有', type: 'line', data: buyHoldCurve, smooth: true, lineStyle: { width: 1.5, color: '#94a3b8', type: 'dashed' }, symbol: 'none' },
+      { type: 'line', markLine: { silent: true, symbol: 'none', data: tradeMarks, lineStyle: { width: 0.8 } } }
+    ]
+  });
+}
+
+async function runBacktestOptimize() {
+  const symbol = document.getElementById('btSymbol').value.toUpperCase();
+  const strategy = document.getElementById('btStrategy').value;
+  const statusEl = document.getElementById('optimizeStatus');
+  statusEl.textContent = '⏳ 正在网格搜索最优参数...';
+
+  let paramGrid = [];
+  if (strategy === 'ma_cross') {
+    for (let f = 3; f <= 15; f += 2)
+      for (let s = 15; s <= 40; s += 5)
+        if (f < s) paramGrid.push({ fast: f, slow: s });
+  } else if (strategy === 'rsi') {
+    for (let p = 7; p <= 21; p += 7)
+      for (let o = 20; o <= 40; o += 10)
+        for (let b = 60; b <= 80; b += 10)
+          paramGrid.push({ period: p, oversold: o, overbought: b });
+  } else if (strategy === 'momentum' || strategy === 'sector_rotation') {
+    for (let l = 5; l <= 40; l += 5) paramGrid.push({ lookback: l });
+  }
+
+  let best = null;
+  let tested = 0;
+  for (const params of paramGrid) {
+    try {
+      const resp = await fetch(apiBase('/backtest'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol, strategy, params, market })
+      });
+      const r = await resp.json();
+      if (!r.error) {
+        const score = r.total_return - r.max_drawdown * 0.5 + r.sharpe * 5;
+        if (!best || score > best.score) best = { ...r, score, params };
+      }
+      tested++;
+      statusEl.textContent = `⏳ 已测试 ${tested}/${paramGrid.length} 组参数...`;
+    } catch(e) {}
+    await new Promise(r => setTimeout(r, 120)); // rate limit
+  }
+
+  if (best) {
+    statusEl.textContent = `✅ 最优参数找到！测试了 ${tested} 组`;
+    // Fill params back to form
+    if (strategy === 'ma_cross') {
+      document.getElementById('pFast').value = best.params.fast;
+      document.getElementById('pSlow').value = best.params.slow;
+    } else if (strategy === 'rsi') {
+      document.getElementById('pPeriod').value = best.params.period;
+      document.getElementById('pOversold').value = best.params.oversold;
+      document.getElementById('pOverbought').value = best.params.overbought;
+    } else if (strategy === 'momentum' || strategy === 'sector_rotation') {
+      document.getElementById('pLookback').value = best.params.lookback;
+    }
+    renderBacktestResult(best);
+  } else {
+    statusEl.textContent = '❌ 未找到有效参数';
+  }
+}
+
+// ── Multi-Sector Comparison in Modal ──
+let compareList = [];
+function toggleCompare(symbol, name) {
+  const idx = compareList.findIndex(c => c.symbol === symbol);
+  if (idx >= 0) { compareList.splice(idx, 1); }
+  else if (compareList.length < 5) { compareList.push({ symbol, name }); }
+  else { showToast('最多对比5个板块'); return; }
+  updateCompareBadge();
+}
+function updateCompareBadge() {
+  const btn = document.getElementById('compareBtn');
+  if (btn) btn.textContent = `📊 对比 (${compareList.length})`;
+}
+async function showCompareChart() {
+  if (compareList.length < 2) { showToast('请至少选择2个板块对比'); return; }
+  const container = document.getElementById('chartContainer');
+  container.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">⏳ 加载对比数据...</div>';
+  const colors = ['#06b6d4', '#f59e0b', '#22c55e', '#ef4444', '#a855f7'];
+  const series = [];
+  for (let i = 0; i < compareList.length; i++) {
+    const c = compareList[i];
+    try {
+      const r = await fetch(apiBase('/stock/') + c.symbol + '/history');
+      const d = await r.json();
+      if (d.ohlc && d.ohlc.length > 0) {
+        const base = d.ohlc[0][2]; // first close
+        series.push({
+          name: c.symbol + ' ' + c.name,
+          type: 'line',
+          data: d.ohlc.map(item => ((item[2] - base) / base * 100).toFixed(2)),
+          smooth: true,
+          lineStyle: { width: 2, color: colors[i % colors.length] },
+          symbol: 'none'
+        });
+      }
+    } catch(e) {}
+  }
+  container.innerHTML = '<div id="compareChart" style="height:420px;width:100%"></div>';
+  const chart = echarts.init(document.getElementById('compareChart'), 'dark');
+  chart.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: series.map(s => s.name), textStyle: { color: '#94a3b8' }, top: 0 },
+    grid: { left: '8%', right: '4%', top: '12%', bottom: '10%' },
+    xAxis: { type: 'category', data: series[0]?.data.map((_,i) => 'D'+i) || [], axisLabel: { show: false } },
+    yAxis: { type: 'value', name: '收益率 %', axisLabel: { color: '#94a3b8', formatter: v=>v+'%' }, splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } } },
+    series
+  });
 }
 
 // ── Init ──
 updateParams();
-loadDates().then(() => loadDashboard());
-setInterval(loadDashboard, 600000);
+loadDates().then(() => {
+  updateDateNavUI();
+  loadDashboard();
+  loadMacro();
+});
+setInterval(() => {
+  if (currentDateIdx === -1) loadDashboard();
+}, 600000);
 </script>
 </body>
 </html>
