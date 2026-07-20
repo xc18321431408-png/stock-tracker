@@ -19,7 +19,7 @@ body{font-family:-apple-system,'Microsoft YaHei','PingFang SC','Noto Sans SC',sa
 .container{max-width:1600px;margin:0 auto}
 
 /* Tabs */
-.tabs{display:flex;gap:6px;margin-bottom:24px;padding:6px;background:var(--card);border:1px solid var(--border);border-radius:12px;width:fit-content}
+.tabs{display:flex;gap:6px;margin-bottom:24px;padding:6px;background:var(--card);border:1px solid var(--border);border-radius:12px;width:fit-content;flex-wrap:nowrap;overflow-x:auto;max-width:100%}
 .tab{padding:10px 20px;cursor:pointer;border:none;background:transparent;color:var(--muted);font-size:14px;font-weight:600;border-radius:8px;transition:all .2s}
 .tab:hover{color:var(--text);background:rgba(56,189,248,0.08)}
 .tab.active{color:#fff;background:var(--accent);box-shadow:0 2px 8px rgba(56,189,248,0.25)}
@@ -82,7 +82,7 @@ body{font-family:-apple-system,'Microsoft YaHei','PingFang SC','Noto Sans SC',sa
 .modal .loading{text-align:center;padding:40px;color:var(--muted)}
 
 /* Chart */
-.chart-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px;margin-bottom:24px;box-shadow:var(--card-shadow)}
+.chart-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:24px;box-shadow:var(--card-shadow)}
 .chart-box h3{font-size:16px;margin-bottom:16px;color:var(--text);font-weight:700}
 canvas{max-height:380px}
 
@@ -1237,8 +1237,8 @@ async function renderRotationChart() {
     const fontSize = sectors.length <= 25 ? 13 : 11;
     const axisFontSize = sectors.length <= 25 ? 14 : 12;
 
-    // Dynamic height: each row at least 26px
-    const rowH = 26;
+    // Dynamic height: each row at least 32px
+    const rowH = 32;
     const totalH = Math.max(420, sectors.length * rowH + 110);
     el.style.height = totalH + 'px';
 
@@ -1255,7 +1255,7 @@ async function renderRotationChart() {
             '<span style="color:' + color + ';font-weight:700">' + (v != null ? v + '%' : '无数据') + '</span>';
         }
       },
-      grid: { top: 30, bottom: 80, left: 150, right: 40 },
+      grid: { top: 30, bottom: 80, left: 200, right: 40 },
       xAxis: {
         type: 'category', data: xLabels,
         axisLabel: { color: '#e2e8f0', fontSize: axisFontSize, fontWeight: 'bold', margin: 14 },
@@ -1339,8 +1339,8 @@ async function renderCorrelationChart() {
     const axisFontSize = names.length <= 20 ? 13 : 11;
     const rotate = names.length > 25 ? 45 : 35;
 
-    // Dynamic height: each row at least 22px
-    const cellH = 22;
+    // Dynamic height: each row at least 28px
+    const cellH = 28;
     const totalH = Math.max(420, names.length * cellH + 110);
     el.style.height = totalH + 'px';
 
@@ -1357,7 +1357,7 @@ async function renderCorrelationChart() {
             '<span style="color:' + color + ';font-weight:700">' + v.toFixed(2) + '</span>';
         }
       },
-      grid: { top: 30, bottom: 80, left: 140, right: 40 },
+      grid: { top: 30, bottom: 80, left: 180, right: 40 },
       xAxis: {
         type: 'category', data: names,
         axisLabel: { color: '#e2e8f0', fontSize: axisFontSize, fontWeight: 'bold', rotate: rotate, margin: 14 },
