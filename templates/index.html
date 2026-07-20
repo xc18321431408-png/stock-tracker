@@ -1283,6 +1283,7 @@ async function renderRotationChart() {
         emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } }
       }]
     });
+    chart.resize({ width: el.clientWidth, height: totalH });
     console.log('[Rotation] rendered ok');
   } catch(e) {
     console.error('[Rotation] error', e);
@@ -1333,23 +1334,26 @@ async function renderCorrelationChart() {
     if (window._corrChart) { window._corrChart.dispose(); window._corrChart = null; }
 
     // Adjust label visibility based on density
-    const showLabel = names.length <= 30;
-    const fontSize = names.length <= 20 ? 12 : (names.length <= 30 ? 10 : 9);
-    const axisFontSize = names.length <= 20 ? 13 : 12;
-    const rotate = names.length > 30 ? 35 : (names.length > 20 ? 25 : 0);
+    const showLabel = names.length <= 25;
+    const fontSize = names.length <= 20 ? 12 : (names.length <= 25 ? 10 : 9);
+    const axisFontSize = 11;
+    const rotate = names.length > 25 ? 30 : 0;
 
-    // Dynamic height: each row at least 36px
-    const cellH = 36;
-    const totalH = Math.max(420, names.length * cellH + 130);
+    // Dynamic height: each row at least 40px
+    const cellH = 40;
+    const totalH = Math.max(420, names.length * cellH + 140);
     el.style.height = totalH + 'px';
 
     // Ensure enough width so cells aren't squeezed
-    const minCellW = 28;
-    const minChartW = names.length * minCellW + 280;
+    const minCellW = 32;
+    const minChartW = names.length * minCellW + 320;
     el.style.width = minChartW + 'px';
 
     const chart = echarts.init(el, 'dark');
     window._corrChart = chart;
+
+    // Default show first 20 items, user can scroll via slider
+    const defaultEnd = Math.min(20, names.length) / names.length * 100;
 
     chart.setOption({
       tooltip: {
@@ -1364,16 +1368,16 @@ async function renderCorrelationChart() {
             '<span style="color:' + color + ';font-weight:700">' + v.toFixed(2) + '</span>';
         }
       },
-      grid: { top: 30, bottom: 100, left: 220, right: 40 },
+      grid: { top: 30, bottom: 110, left: 260, right: 60 },
       xAxis: {
         type: 'category', data: names,
-        axisLabel: { color: '#e2e8f0', fontSize: axisFontSize, fontWeight: 'bold', rotate: rotate, margin: 14, interval: 0 },
+        axisLabel: { color: '#e2e8f0', fontSize: axisFontSize, fontWeight: 'bold', rotate: rotate, margin: 14, interval: 0, width: 220, overflow: 'truncate', ellipsis: '..' },
         axisLine: { lineStyle: { color: '#334155' } },
         splitArea: { show: true }
       },
       yAxis: {
         type: 'category', data: names,
-        axisLabel: { color: '#e2e8f0', fontSize: axisFontSize, margin: 14 },
+        axisLabel: { color: '#e2e8f0', fontSize: axisFontSize, margin: 14, width: 240, overflow: 'truncate', ellipsis: '..' },
         axisLine: { lineStyle: { color: '#334155' } },
         inverse: true,
         splitArea: { show: true }
@@ -1385,8 +1389,10 @@ async function renderCorrelationChart() {
         itemWidth: 20, itemHeight: 12
       },
       dataZoom: [
-        { type: 'inside', xAxisIndex: 0, start: 0, end: 100 },
-        { type: 'inside', yAxisIndex: 0, start: 0, end: 100 }
+        { type: 'slider', xAxisIndex: 0, start: 0, end: defaultEnd, height: 18, bottom: 38, borderColor: '#334155', fillerColor: 'rgba(56,189,248,0.2)', handleStyle: { color: '#38bdf8' }, textStyle: { color: '#94a3b8' } },
+        { type: 'slider', yAxisIndex: 0, start: 0, end: defaultEnd, width: 18, left: 18, borderColor: '#334155', fillerColor: 'rgba(56,189,248,0.2)', handleStyle: { color: '#38bdf8' }, textStyle: { color: '#94a3b8' } },
+        { type: 'inside', xAxisIndex: 0 },
+        { type: 'inside', yAxisIndex: 0 }
       ],
       series: [{
         name: '相关系数', type: 'heatmap', data: heatData,
@@ -1395,6 +1401,7 @@ async function renderCorrelationChart() {
         emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } }
       }]
     });
+    chart.resize({ width: minChartW, height: totalH });
     console.log('[Correlation] rendered ok');
   } catch(e) {
     console.error('[Correlation] error', e);
