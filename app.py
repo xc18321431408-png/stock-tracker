@@ -339,6 +339,9 @@ def _fetch_all_news(market='us'):
         else:
             futures = {executor.submit(_fetch_yahoo_rss, sym, name): sym for sym, name in fetch_symbols}
 
+        # Also fetch KOL tweets in parallel
+        kol_future = executor.submit(_fetch_all_kol_tweets, market)
+
         for future in concurrent.futures.as_completed(futures):
             sym = futures[future]
             try:
@@ -350,21 +353,15 @@ def _fetch_all_news(market='us'):
             except Exception as e:
                 print(f"[News] Future error for {sym}: {e}")
 
-    # Deduplicate by exact title match (case-insensitive)
-    seen_titles = set()
-    unique = []
-    for a in all_articles:
-        title_key = a['title'].strip().lower()
-        if title_key and title_key not in seen_titles:
-            seen_titles.add(title_key)
-            unique.append(a)
+        # Get KOL tweets result
+        try:
+            kol_articles = kol_future.result()
+            all_articles.extend(kol_articles)
+            print(f"[News] Merged {len(kol_articles)} KOL tweets")
+        except Exception as e:
+            print(f"[News] KOL fetch error: {e}")
 
-    # Also fetch KOL tweets
-    try:
-        kol_articles = _fetch_all_kol_tweets(market)
-        all_articles.extend(kol_articles)
-    except Exception as e:
-        print(f"[News] KOL fetch error: {e}")
+    # Deduplicate by exact title match
 
     # Sort by published time (newest first), articles without time go last
     def _sort_key(a):
