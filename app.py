@@ -1755,6 +1755,10 @@ def _warmup_kol_cache():
         us_tweets = _fetch_all_kol_tweets('us')
         cn_tweets = _fetch_all_kol_tweets('cn')
         print(f"[KOL] Cache warmed: {len(us_tweets)} US + {len(cn_tweets)} CN tweets")
+        # Invalidate news cache so next API request picks up KOL tweets
+        with _news_cache_lock:
+            _news_cache.pop('us', None)
+            _news_cache.pop('cn', None)
     except Exception as e:
         print(f"[KOL] Cache warmup failed: {e}")
 
@@ -1765,6 +1769,8 @@ def _refresh_kol_cache():
         with _news_cache_lock:
             _kol_cache.pop('us', None)
             _kol_cache.pop('cn', None)
+            _news_cache.pop('us', None)
+            _news_cache.pop('cn', None)
         _fetch_all_kol_tweets('us')
         _fetch_all_kol_tweets('cn')
         print("[KOL] Cache refreshed")
