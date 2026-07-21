@@ -362,6 +362,13 @@ def _fetch_all_news(market='us'):
             print(f"[News] KOL fetch error: {e}")
 
     # Deduplicate by exact title match
+    seen_titles = set()
+    unique = []
+    for a in all_articles:
+        title_key = a['title'].strip().lower()
+        if title_key and title_key not in seen_titles:
+            seen_titles.add(title_key)
+            unique.append(a)
 
     # Sort by published time (newest first), articles without time go last
     def _sort_key(a):
