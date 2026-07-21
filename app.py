@@ -6,9 +6,12 @@ US + China A-Share Stock Market Sector Tracker v3.0
 - Quantitative trading backtest platform
 - Security protections
 """
-import os, json, sqlite3, secrets, re, time, requests, math
+import os, json, sqlite3, secrets, re, time, requests, math, threading, concurrent.futures
 from datetime import datetime, timedelta
 from functools import wraps
+from collections import defaultdict
+from email.utils import parsedate_to_datetime
+import xml.etree.ElementTree as ET
 from flask import Flask, render_template, request, jsonify, abort
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -31,6 +34,174 @@ SA_HEADERS = {
 YF_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
 }
+
+# ── News Cache ─────────────────────────────────────────────
+_news_cache = {}  # {market: (timestamp, articles)}
+_news_cache_lock = threading.Lock()
+
+def _parse_rss_date(date_str):
+    """Parse various RSS date formats to ISO."""
+    try:
+        return parsedate_to_datetime(date_str).isoformat()
+    except:
+        return date_str
+
+def _fetch_yahoo_rss(symbol):
+    """Fetch Yahoo Finance RSS headlines for a single stock symbol."""
+    articles = []
+    try:
+        url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
+        resp = requests.get(url, headers=YF_HEADERS, timeout=8)
+        if resp.status_code != 200:
+            return articles
+        root = ET.fromstring(resp.content)
+        for item in root.findall('.//item'):
+            title_el = item.find('title')
+            link_el = item.find('link')
+            pub_el = item.find('pubDate')
+            desc_el = item.find('description')
+            title = title_el.text.strip() if title_el is not None and title_el.text else ''
+            link = link_el.text.strip() if link_el is not None and link_el.text else '#'
+            published = _parse_rss_date(pub_el.text.strip()) if pub_el is not None and pub_el.text else ''
+            desc = desc_el.text.strip() if desc_el is not None and desc_el.text else ''
+            if title:
+                articles.append({
+                    'title': title,
+                    'link': link,
+                    'published': published,
+                    'source': 'Yahoo',
+                    'symbol': symbol,
+                    'desc': desc,
+                })
+    except Exception as e:
+        print(f"[News] RSS error for {symbol}: {e}")
+    return articles
+
+def _fetch_cn_stock_news(symbol, name):
+    """Fetch news for CN A-share stock using East Money API."""
+    articles = []
+    try:
+        code = symbol.replace('.SS','').replace('.SZ','').replace('.BJ','')
+        # Determine market code: 1=SSE, 0=SZSE
+        if '.SZ' in symbol:
+            mkt = '0'
+        elif '.BJ' in symbol:
+            # use a try-fetch with SSE format first then fallback
+            mkt = '0'
+        else:
+            mkt = '1'
+        secid = f"{mkt}.{code}"
+        url = f"https://push2.eastmoney.com/api/qt/stock/news/get?secid={secid}&page=1&size=8"
+        resp = requests.get(url, headers=YF_HEADERS, timeout=8)
+        if resp.status_code != 200:
+            return articles
+        data = resp.json()
+        news_list = (data.get('data') or {}).get('list') or []
+        for item in news_list:
+            articles.append({
+                'title': item.get('title', ''),
+                'link': item.get('url', '#'),
+                'published': item.get('showTime', ''),
+                'source': item.get('source', '东方财富'),
+                'symbol': symbol,
+                'desc': item.get('digest', ''),
+            })
+    except Exception as e:
+        print(f"[News] CN news error for {symbol}: {e}")
+    return articles
+
+def _get_symbol_sector_map(market='us'):
+    """Build symbol → [sector_names] mapping, also returns {sector: [stock_infos]}."""
+    sectors = SECTOR_STOCKS if market != 'cn' else CN_SECTOR_STOCKS
+    symbol_sectors = defaultdict(list)
+    sector_stocks = {}
+    for sector_name, stocks in sectors.items():
+        sector_stocks[sector_name] = []
+        for info in stocks:
+            sym = info[0]
+            name = info[1]
+            desc = info[2] if len(info) > 2 else ''
+            symbol_sectors[sym].append(sector_name)
+            sector_stocks[sector_name].append({'symbol': sym, 'name': name, 'desc': desc})
+    return dict(symbol_sectors), sector_stocks
+
+def _fetch_all_news(market='us'):
+    """Fetch news for all sector stocks (cached 10min)."""
+    now = time.time()
+    with _news_cache_lock:
+        cached = _news_cache.get(market)
+        if cached and (now - cached[0]) < 600:
+            return cached[1]
+
+    symbol_sectors, sector_stocks = _get_symbol_sector_map(market)
+
+    # Collect unique symbols (top 3 per sector)
+    seen = set()
+    fetch_symbols = []
+    for sname, stocks in sector_stocks.items():
+        for s in stocks[:3]:
+            if s['symbol'] not in seen:
+                seen.add(s['symbol'])
+                fetch_symbols.append((s['symbol'], s['name']))
+
+    # Limit to avoid overwhelming requests
+    fetch_symbols = fetch_symbols[:50]
+
+    all_articles = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+        if market == 'cn':
+            futures = {executor.submit(_fetch_cn_stock_news, sym, name): sym for sym, name in fetch_symbols}
+        else:
+            futures = {executor.submit(_fetch_yahoo_rss, sym): sym for sym, name in fetch_symbols}
+
+        for future in concurrent.futures.as_completed(futures):
+            sym = futures[future]
+            try:
+                articles = future.result()
+                sectors = symbol_sectors.get(sym, [])
+                for a in articles:
+                    a['sectors'] = sectors
+                all_articles.extend(articles)
+            except Exception as e:
+                print(f"[News] Future error for {sym}: {e}")
+
+    # Deduplicate by title similarity (case-insensitive)
+    seen_titles = set()
+    unique = []
+    for a in all_articles:
+        title_key = a['title'].strip().lower()
+        # Remove stock ticker from key to avoid missing duplicates
+        title_key = re.sub(r'\b[a-z]{1,5}\b', '', title_key).strip()
+        if title_key and title_key not in seen_titles:
+            seen_titles.add(title_key)
+            unique.append(a)
+
+    # Sort by published time (newest first), articles without time go last
+    def _sort_key(a):
+        try:
+            return datetime.fromisoformat(a.get('published', '').replace('Z','+00:00'))
+        except:
+            try:
+                return datetime.strptime(a.get('published', ''), '%Y-%m-%d %H:%M:%S')
+            except:
+                return datetime(2000, 1, 1)
+    unique.sort(key=_sort_key, reverse=True)
+
+    # Format for frontend
+    result = []
+    for a in unique:
+        result.append({
+            'title': a['title'],
+            'link': a.get('link', '#'),
+            'source': a.get('source', ''),
+            'published': a.get('published', ''),
+            'sector_tags': json.dumps(a.get('sectors', []), ensure_ascii=False),
+        })
+
+    with _news_cache_lock:
+        _news_cache[market] = (now, result)
+
+    return result
 
 # ── 40+ Sub-Industry ETFs ───────────────────────────────────
 # (parent_category, symbol, chinese_name)
@@ -1750,6 +1921,29 @@ def api_health():
     with sqlite3.connect(DB_PATH) as conn:
         count = conn.execute("SELECT COUNT(*) FROM sector_data").fetchone()[0]
     return jsonify({"status": "healthy", "records": count, "time": datetime.now().isoformat()})
+
+# ── News API ──
+@app.route('/api/news')
+def api_news():
+    """Return aggregated sector-stock news for US market."""
+    limit = request.args.get('limit', 25, type=int)
+    try:
+        articles = _fetch_all_news('us')
+        return jsonify(articles[:limit])
+    except Exception as e:
+        print(f"[News] Error: {e}")
+        return jsonify([])
+
+@app.route('/api/cn/news')
+def api_cn_news():
+    """Return aggregated sector-stock news for CN market."""
+    limit = request.args.get('limit', 25, type=int)
+    try:
+        articles = _fetch_all_news('cn')
+        return jsonify(articles[:limit])
+    except Exception as e:
+        print(f"[News CN] Error: {e}")
+        return jsonify([])
 
 @app.route('/api/rotation')
 def api_rotation():

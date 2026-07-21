@@ -125,6 +125,15 @@ canvas{max-height:380px}
   .date-nav .nav-group{order:0}
   .date-nav .latest-btn{order:0}
 }
+
+/* News panel */
+.news-item{display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);font-size:13px;line-height:1.5}
+.news-item:hover{background:rgba(56,189,248,0.04)}
+.news-item .news-source{font-size:10px;color:var(--muted);white-space:nowrap;min-width:50px;text-align:center;padding:2px 6px;background:var(--bg);border-radius:3px}
+.news-item .news-title{flex:1;color:var(--text);text-decoration:none}
+.news-item .news-title:hover{color:var(--accent)}
+.news-item .news-time{font-size:10px;color:var(--muted);white-space:nowrap}
+.news-tag{display:inline-block;font-size:10px;padding:1px 6px;border-radius:3px;margin:2px;background:rgba(56,189,248,0.12);color:var(--accent)}
 </style>
 </head>
 <body>
@@ -177,6 +186,17 @@ canvas{max-height:380px}
 </div>
 
 <div class="cards" id="macroCards" style="display:none;margin-bottom:12px"></div>
+
+<!-- News Panel -->
+<div class="chart-box" id="newsPanel" style="margin-bottom:16px;padding:16px 20px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <h3 style="margin:0">📰 <span>龙头板块实时快讯</span></h3>
+    <span style="font-size:11px;color:var(--muted)" id="newsUpdateTime"></span>
+  </div>
+  <div id="newsContent" style="max-height:280px;overflow-y:auto">
+    <div class="loading-spinner"><div class="spinner"></div></div>
+  </div>
+</div>
 
 <div class="cards" id="summaryCards"></div>
 
@@ -371,6 +391,7 @@ function switchMarket(m) {
     updateDateNavUI();
     await loadDashboard();
     if (market === 'us') loadMacro(); else document.getElementById('macroCards').style.display = 'none';
+    loadNews();
 
     // Refresh current tab visuals after data is ready
     const activeTab = document.querySelector('.tab.active');
@@ -444,7 +465,7 @@ function updateDateNavUI() {
 async function loadDates() {
   try {
     const resp = await fetch(apiBase('/dates'));
-    allDates = (await resp.json()).reverse(); // ASC: oldest first
+    allDates = (await resp.json()); // ASC: oldest first, slider left=old right=new
     if (allDates.length > 0) {
       document.getElementById('dateSlider').max = allDates.length - 1;
       document.getElementById('dateSlider').value = allDates.length - 1;
@@ -545,6 +566,7 @@ async function loadDashboard(specificDate) {
     renderChart(allSectors);
     renderCategories(allSectors);
     if (market === 'us') loadMacro(); else document.getElementById('macroCards').style.display = 'none';
+    loadNews();
   } catch(e) { console.error(e); }
   setLoading(false);
 }
@@ -1180,6 +1202,37 @@ async function loadMacro() {
   } catch(e) {}
 }
 
+// ── News Panel ──
+async function loadNews() {
+  try {
+    const resp = await fetch(apiBase('/news?limit=25'));
+    const articles = await resp.json();
+    if (!articles.length) {
+      document.getElementById('newsContent').innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">📭 快讯数据收集中，请稍后再看</div>';
+      return;
+    }
+    const now = new Date();
+    document.getElementById('newsUpdateTime').textContent = '更新 ' + now.toLocaleTimeString('zh-CN');
+    let html = '';
+    for (const a of articles) {
+      let tags = [];
+      try { tags = JSON.parse(a.sector_tags || '[]'); } catch(e) {}
+      const tagHtml = tags.slice(0,3).map(t => `<span class="news-tag">${t}</span>`).join('');
+      const timeAgo = a.published ? (() => {
+        try { const d = new Date(a.published); const min = Math.round((now-d)/60000); return min<60?min+'分钟前':min<1440?Math.round(min/60)+'小时前':Math.round(min/1440)+'天前'; } catch(e) { return ''; }
+      })() : '';
+      html += `<div class="news-item">
+        <span class="news-source">${a.source||''}</span>
+        <a class="news-title" href="${a.link||'#'}" target="_blank">${a.title} ${tagHtml}</a>
+        <span class="news-time">${timeAgo}</span>
+      </div>`;
+    }
+    document.getElementById('newsContent').innerHTML = html;
+  } catch(e) {
+    document.getElementById('newsContent').innerHTML = '<div style="color:var(--muted);padding:12px">⏳ 快讯加载中...</div>';
+  }
+}
+
 // ── Watchlist / Favorites ──
 function getWatchlist() {
   try { return JSON.parse(localStorage.getItem('sector_watchlist') || '[]'); } catch(e) { return []; }
@@ -1612,10 +1665,13 @@ loadDates().then(() => {
   updateDateNavUI();
   loadDashboard();
   loadMacro();
+  loadNews();
 });
 setInterval(() => {
   if (currentDateIdx === -1) loadDashboard();
 }, 600000);
+// Refresh news display every 15 min
+setInterval(() => { loadNews(); }, 900000);
 </script>
 </body>
 </html>
