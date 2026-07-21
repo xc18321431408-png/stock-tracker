@@ -1288,8 +1288,8 @@ async function renderRotationChart() {
     const axisFontSize = sectors.length <= 25 ? 14 : 12;
 
     // Dynamic height: each row at least 26px
-    const rowH = 26;
-    const totalH = Math.max(420, sectors.length * rowH + 110);
+    const rowH = 32;
+    const totalH = Math.max(420, sectors.length * rowH + 130);
     el.style.height = totalH + 'px';
 
     const chart = echarts.init(el, 'dark');
@@ -1393,8 +1393,8 @@ async function renderCorrelationChart() {
     const rotate = names.length > 25 ? 45 : 35;
 
     // Dynamic height: each row at least 22px
-    const cellH = 22;
-    const totalH = Math.max(420, names.length * cellH + 110);
+    const cellH = 30;
+    const totalH = Math.max(420, names.length * cellH + 130);
     el.style.height = totalH + 'px';
 
     chart.setOption({
