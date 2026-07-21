@@ -46,8 +46,9 @@ def _parse_rss_date(date_str):
     except:
         return date_str
 
-def _fetch_yahoo_rss(symbol):
-    """Fetch Yahoo Finance RSS headlines for a single stock symbol."""
+def _fetch_yahoo_rss(symbol, company_name=''):
+    """Fetch Yahoo Finance RSS headlines for a single stock symbol.
+    Only returns articles that mention the symbol or company name."""
     articles = []
     try:
         url = f"https://feeds.finance.yahoo.com/rss/2.0/headline?s={symbol}&region=US&lang=en-US"
@@ -64,7 +65,13 @@ def _fetch_yahoo_rss(symbol):
             link = link_el.text.strip() if link_el is not None and link_el.text else '#'
             published = _parse_rss_date(pub_el.text.strip()) if pub_el is not None and pub_el.text else ''
             desc = desc_el.text.strip() if desc_el is not None and desc_el.text else ''
-            if title:
+            # Only keep articles that mention the stock symbol or company name
+            text_to_check = (title + ' ' + desc).lower()
+            sym_lower = symbol.lower()
+            # Check if symbol appears as a whole word (not part of another word)
+            sym_mentioned = re.search(r'\b' + re.escape(sym_lower) + r'\b', text_to_check)
+            name_mentioned = company_name and company_name.lower() in text_to_check
+            if title and (sym_mentioned or name_mentioned or len(articles) < 3):
                 articles.append({
                     'title': title,
                     'link': link,
@@ -73,6 +80,10 @@ def _fetch_yahoo_rss(symbol):
                     'symbol': symbol,
                     'desc': desc,
                 })
+        # If we got enough filtered articles, only return those; otherwise keep top 5
+        filtered = [a for a in articles if sym_lower in (a['title'] + a['desc']).lower()]
+        if len(filtered) >= 2:
+            articles = filtered
     except Exception as e:
         print(f"[News] RSS error for {symbol}: {e}")
     return articles
@@ -135,24 +146,24 @@ def _fetch_all_news(market='us'):
 
     symbol_sectors, sector_stocks = _get_symbol_sector_map(market)
 
-    # Collect unique symbols (top 3 per sector)
+    # Collect unique symbols (top 2 per sector for speed)
     seen = set()
     fetch_symbols = []
     for sname, stocks in sector_stocks.items():
-        for s in stocks[:3]:
+        for s in stocks[:2]:
             if s['symbol'] not in seen:
                 seen.add(s['symbol'])
                 fetch_symbols.append((s['symbol'], s['name']))
 
     # Limit to avoid overwhelming requests
-    fetch_symbols = fetch_symbols[:50]
+    fetch_symbols = fetch_symbols[:40]
 
     all_articles = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
         if market == 'cn':
             futures = {executor.submit(_fetch_cn_stock_news, sym, name): sym for sym, name in fetch_symbols}
         else:
-            futures = {executor.submit(_fetch_yahoo_rss, sym): sym for sym, name in fetch_symbols}
+            futures = {executor.submit(_fetch_yahoo_rss, sym, name): sym for sym, name in fetch_symbols}
 
         for future in concurrent.futures.as_completed(futures):
             sym = futures[future]
@@ -165,13 +176,11 @@ def _fetch_all_news(market='us'):
             except Exception as e:
                 print(f"[News] Future error for {sym}: {e}")
 
-    # Deduplicate by title similarity (case-insensitive)
+    # Deduplicate by exact title match (case-insensitive)
     seen_titles = set()
     unique = []
     for a in all_articles:
         title_key = a['title'].strip().lower()
-        # Remove stock ticker from key to avoid missing duplicates
-        title_key = re.sub(r'\b[a-z]{1,5}\b', '', title_key).strip()
         if title_key and title_key not in seen_titles:
             seen_titles.add(title_key)
             unique.append(a)
