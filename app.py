@@ -37,7 +37,172 @@ YF_HEADERS = {
 
 # ── News Cache ─────────────────────────────────────────────
 _news_cache = {}  # {market: (timestamp, articles)}
+_kol_cache = {}   # {market: (timestamp, articles)}
 _news_cache_lock = threading.Lock()
+
+# ── KOL Twitter Accounts ──────────────────────────────────
+# (handle, display_name, focus_tags, market)
+TWITTER_KOLS = [
+    ("aleabitoreddit", "Serenity·白毛股神", ["AI人工智能", "半导体", "芯片"], "us"),
+    ("dylan522p", "Dylan Patel·半导体研究", ["半导体", "芯片", "AI人工智能"], "us"),
+    ("firstadopter", "Tae Kim·芯片分析", ["半导体", "芯片", "科技"], "us"),
+    ("xingpt", "XinGPT·AI供应链", ["AI人工智能", "半导体", "云计算"], "us"),
+    ("tengyanai", "滕岩·AI半导体", ["AI人工智能", "半导体", "科技"], "us"),
+    ("kobeissiletter", "Kobeissi·宏观策略", ["金融", "宏观经济"], "us"),
+    ("amy6tina", "Sober·期权策略", ["金融", "期权"], "us"),
+    ("incomesharks", "IncomeSharks·财报分析", ["金融", "财报"], "us"),
+    ("convertbond", "L.McDonald·流动性与利率", ["金融", "宏观经济", "银行"], "us"),
+    # CN KOLs (less active on Twitter, but occasionally post)
+    ("diaomao2023", "交易员小帅·宏观", ["宏观经济", "金融"], "cn"),
+    ("jackli727", "零下二度·期权宏观", ["宏观经济", "期权"], "cn"),
+]
+
+# Build ticker→sector lookup cache
+_ticker_sector_map = {}  # {ticker_lower: [sector_names]}
+_ticker_sector_built = False
+
+def _build_ticker_sector_map():
+    """Build a lookup from stock ticker to sector names."""
+    global _ticker_sector_built
+    if _ticker_sector_built:
+        return
+    for sector_stocks in [SECTOR_STOCKS, CN_SECTOR_STOCKS]:
+        for sector_name, stocks in sector_stocks.items():
+            for info in stocks:
+                ticker = info[0].lower().replace('.ss','').replace('.sz','').replace('.bj','')
+                if ticker not in _ticker_sector_map:
+                    _ticker_sector_map[ticker] = []
+                if sector_name not in _ticker_sector_map[ticker]:
+                    _ticker_sector_map[ticker].append(sector_name)
+    _ticker_sector_built = True
+
+def _extract_tickers_from_text(text):
+    """Extract stock tickers from tweet text (e.g. $AAPL, $NVDA)."""
+    tickers = set()
+    for match in re.finditer(r'\$([A-Za-z]{1,6})', text):
+        ticker = match.group(1).upper()
+        tickers.add(ticker)
+    # Also match common ticker mentions without $ (e.g. 'NVDA is up')
+    # But be more careful to avoid false positives - match uppercase 2-5 letter words
+    for match in re.finditer(r'\b([A-Z]{2,5})\b', text):
+        ticker = match.group(1)
+        if ticker.lower() in _ticker_sector_map:
+            tickers.add(ticker)
+    return tickers
+
+def _fetch_kol_tweets_via_nitter(handle, name):
+    """Fetch recent tweets for a KOL via Nitter RSS. Returns list of articles."""
+    articles = []
+    # Try multiple Nitter instances for reliability
+    instances = [
+        'https://nitter.net',
+        'https://nitter.poast.org',
+    ]
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+    }
+    for instance in instances:
+        try:
+            url = f"{instance}/{handle}/rss"
+            resp = requests.get(url, headers=headers, timeout=12)
+            if resp.status_code != 200 or len(resp.text) < 200:
+                continue
+            root = ET.fromstring(resp.text)
+            for item in root.findall('.//item'):
+                title_el = item.find('title')
+                link_el = item.find('link')
+                pub_el = item.find('pubDate')
+                desc_el = item.find('description')
+                title = title_el.text.strip() if title_el is not None and title_el.text else ''
+                link = link_el.text.strip() if link_el is not None and link_el.text else '#'
+                published = _parse_rss_date(pub_el.text.strip()) if pub_el is not None and pub_el.text else ''
+                desc = desc_el.text.strip() if desc_el is not None and desc_el.text else ''
+                if not title:
+                    continue
+                # Extract stock tickers and match to sectors
+                tickers = _extract_tickers_from_text(title + ' ' + desc)
+                matched_sectors = set()
+                for t in tickers:
+                    secs = _ticker_sector_map.get(t.lower(), [])
+                    matched_sectors.update(secs)
+                # Also tag with KOL's focus areas
+                articles.append({
+                    'title': f'🐦 {name}: {title}',
+                    'link': link,
+                    'published': published,
+                    'source': f'X·{name.split("·")[0]}',
+                    'sectors': list(matched_sectors),
+                    'kol': name,
+                    'tickers': list(tickers),
+                })
+            break  # success, don't try other instances
+        except Exception as e:
+            print(f"[KOL] Nitter error for {handle} via {instance}: {e}")
+            continue
+    return articles
+
+def _fetch_all_kol_tweets(market='us'):
+    """Fetch tweets from all KOLs for given market (cached 20 min)."""
+    now = time.time()
+    with _news_cache_lock:
+        cached = _kol_cache.get(market)
+        if cached and (now - cached[0]) < 1200:  # 20 min cache
+            return cached[1]
+
+    _build_ticker_sector_map()
+
+    kols = [k for k in TWITTER_KOLS if k[3] == market]
+
+    all_articles = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {executor.submit(_fetch_kol_tweets_via_nitter, k[0], k[1]): k for k in kols}
+        for future in concurrent.futures.as_completed(futures):
+            k = futures[future]
+            try:
+                articles = future.result()
+                # Add KOL focus tags to articles without sector matches
+                focus_tags = k[2]
+                for a in articles:
+                    if not a['sectors']:
+                        a['sectors'] = focus_tags[:2]
+                all_articles.extend(articles)
+            except Exception as e:
+                print(f"[KOL] Error fetching {k[1]}: {e}")
+
+    # Deduplicate by title
+    seen = set()
+    unique = []
+    for a in all_articles:
+        key = a['title'].strip().lower()[:80]
+        if key not in seen:
+            seen.add(key)
+            unique.append(a)
+
+    # Sort by time
+    def _sort_key(a):
+        try:
+            return datetime.fromisoformat(a.get('published','').replace('Z','+00:00'))
+        except:
+            return datetime(2000,1,1)
+    unique.sort(key=_sort_key, reverse=True)
+
+    # Format for frontend
+    result = []
+    for a in unique:
+        result.append({
+            'title': a['title'],
+            'link': a.get('link', '#'),
+            'source': a.get('source', ''),
+            'published': a.get('published', ''),
+            'sector_tags': json.dumps(a.get('sectors', []), ensure_ascii=False),
+        })
+
+    with _news_cache_lock:
+        _kol_cache[market] = (now, result)
+
+    return result
 
 def _parse_rss_date(date_str):
     """Parse various RSS date formats to ISO."""
@@ -184,6 +349,13 @@ def _fetch_all_news(market='us'):
         if title_key and title_key not in seen_titles:
             seen_titles.add(title_key)
             unique.append(a)
+
+    # Also fetch KOL tweets
+    try:
+        kol_articles = _fetch_all_kol_tweets(market)
+        all_articles.extend(kol_articles)
+    except Exception as e:
+        print(f"[News] KOL fetch error: {e}")
 
     # Sort by published time (newest first), articles without time go last
     def _sort_key(a):
