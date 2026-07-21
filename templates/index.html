@@ -1250,137 +1250,202 @@ async function renderRotationChart() {
   if (!el) return;
   el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">加载中...</div></div>';
   try {
-    console.log('[Rotation] fetching', apiBase('/rotation'));
     const resp = await fetch(apiBase('/rotation'));
     const data = await resp.json();
-    console.log('[Rotation] response', data.error || ('sectors=' + (data.sectors||[]).length));
-    if (data.error) {
-      el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">📭 该市场板块轮动数据暂未生成，请稍后再试<br><span style="font-size:12px">原因: ' + data.error + '</span></div>';
-      return;
-    }
+    if (data.error) { el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px">暂无数据</p>'; return; }
     const sectors = data.sectors || [];
-    if (sectors.length === 0) {
-      el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">📭 暂无板块轮动数据</div>';
-      return;
-    }
-    sectors.sort((a, b) => (b.d60 || -999) - (a.d60 || -999));
-    const labels = sectors.map(s => (s.name || '') + ' (' + (s.category || '') + ')');
+    if (!sectors.length) { el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px">暂无数据</p>'; return; }
 
-    const rowH = 28;
-    const totalH = Math.max(500, sectors.length * rowH + 80);
-    // Create canvas element
-    el.innerHTML = '<canvas id="rotationCanvas"></canvas>';
-    el.style.height = totalH + 'px';
-    const canvas = document.getElementById('rotationCanvas');
-    if (window._rotChart) { window._rotChart.destroy(); window._rotChart = null; }
+    const periods = [
+      { key: 'd1',  label: '1日涨跌',  icon: '⚡' },
+      { key: 'd5',  label: '5日涨跌',  icon: '📈' },
+      { key: 'd20', label: '20日涨跌', icon: '📊' },
+      { key: 'd60', label: '60日涨跌', icon: '🔭' },
+    ];
 
-    const ctx = canvas.getContext('2d');
-    window._rotChart = new Chart(ctx, {
-      type: 'bar',
-      data: {
-        labels: labels,
-        datasets: [
-          { label: '1日涨跌',  data: sectors.map(s => s.d1  ?? 0), backgroundColor: sectors.map(s => (s.d1??0)>=0?'rgba(239,68,68,.7)':'rgba(34,197,94,.7)'), borderRadius: 3 },
-          { label: '5日涨跌',  data: sectors.map(s => s.d5  ?? 0), backgroundColor: sectors.map(s => (s.d5??0)>=0?'rgba(251,146,60,.7)':'rgba(34,197,160,.7)'), borderRadius: 3 },
-          { label: '20日涨跌', data: sectors.map(s => s.d20 ?? 0), backgroundColor: sectors.map(s => (s.d20??0)>=0?'rgba(250,204,21,.7)':'rgba(45,212,191,.7)'), borderRadius: 3 },
-          { label: '60日涨跌', data: sectors.map(s => s.d60 ?? 0), backgroundColor: sectors.map(s => (s.d60??0)>=0?'rgba(168,85,247,.7)':'rgba(52,211,153,.7)'), borderRadius: 3 },
-        ]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        indexAxis: 'y',
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: { position: 'top', labels: { color: '#94a3b8', font: { size: 12 }, usePointStyle: true, pointStyleWidth: 12 } },
-          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.raw>0?'+':'') + ctx.raw.toFixed(2) + '%' } }
-        },
-        scales: {
-          x: { grid: { color: 'rgba(255,255,255,.05)' }, ticks: { color: '#94a3b8', callback: v => v+'%' } },
-          y: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 11 }, autoSkip: false } }
-        }
-      }
+    // Build period tabs + ranking cards
+    let html = '<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">';
+    periods.forEach((p, idx) => {
+      html += `<button class="rot-period-btn" data-period="${idx}" style="padding:8px 16px;border:1px solid var(--border);border-radius:8px;background:${idx===3?'var(--accent)':'var(--card)'};color:${idx===3?'#fff':'var(--text)'};cursor:pointer;font-size:13px;font-weight:600;transition:all .15s">${p.icon} ${p.label}</button>`;
     });
-    console.log('[Rotation] rendered ok');
+    html += '</div>';
+
+    // Ranking panels for each period
+    periods.forEach((p, idx) => {
+      const sorted = [...sectors].sort((a,b) => {
+        const va = a[p.key] ?? -999, vb = b[p.key] ?? -999;
+        if (va === vb) return 0;
+        if (va === -999 || va === null || isNaN(va)) return 1;
+        if (vb === -999 || vb === null || isNaN(vb)) return -1;
+        return vb - va;
+      }).filter(s => s[p.key] != null && !isNaN(s[p.key]));
+
+      const top5 = sorted.slice(0, 5);
+      const bot5 = sorted.slice(-5).reverse();
+      const display = idx === 3 ? 'block' : 'none';
+
+      html += `<div class="rot-period-panel" data-period="${idx}" style="display:${display}">`;
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">';
+
+      // Top 5 (strongest)
+      html += '<div>';
+      html += '<div style="font-size:14px;font-weight:700;color:var(--red);margin-bottom:10px;display:flex;align-items:center;gap:6px">🔴 最强 Top 5</div>';
+      top5.forEach((s, rank) => {
+        const v = s[p.key];
+        const barW = Math.min(Math.abs(v) / 15 * 100, 100);
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--red)">
+          <span style="font-size:18px;font-weight:800;color:var(--gold);min-width:28px">#${rank+1}</span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+              <span style="font-size:13px;font-weight:600;color:var(--text)">${s.name||''}</span>
+              <span style="font-size:14px;font-weight:800;color:var(--red)">${v>0?'+':''}${v.toFixed(2)}%</span>
+            </div>
+            <div style="height:4px;background:rgba(239,68,68,0.15);border-radius:2px">
+              <div style="height:4px;width:${barW}%;background:var(--red);border-radius:2px"></div>
+            </div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">${s.category||''}</div>
+          </div>
+        </div>`;
+      });
+      html += '</div>';
+
+      // Bottom 5 (weakest)
+      html += '<div>';
+      html += '<div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:10px;display:flex;align-items:center;gap:6px">🟢 最弱 Top 5</div>';
+      bot5.forEach((s, rank) => {
+        const v = s[p.key];
+        const barW = Math.min(Math.abs(v) / 15 * 100, 100);
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--green)">
+          <span style="font-size:18px;font-weight:800;color:var(--gold);min-width:28px">#${rank+1}</span>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+              <span style="font-size:13px;font-weight:600;color:var(--text)">${s.name||''}</span>
+              <span style="font-size:14px;font-weight:800;color:var(--green)">${v>0?'+':''}${v.toFixed(2)}%</span>
+            </div>
+            <div style="height:4px;background:rgba(34,197,94,0.15);border-radius:2px">
+              <div style="height:4px;width:${barW}%;background:var(--green);border-radius:2px"></div>
+            </div>
+            <div style="font-size:10px;color:var(--muted);margin-top:2px">${s.category||''}</div>
+          </div>
+        </div>`;
+      });
+      html += '</div></div></div>';
+    });
+
+    el.innerHTML = html;
+    window._rotChart = null;
+
+    // Tab switching
+    el.querySelectorAll('.rot-period-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const period = btn.dataset.period;
+        el.querySelectorAll('.rot-period-btn').forEach(b => { b.style.background = 'var(--card)'; b.style.color = 'var(--text)'; });
+        btn.style.background = 'var(--accent)'; btn.style.color = '#fff';
+        el.querySelectorAll('.rot-period-panel').forEach(p => { p.style.display = 'none'; });
+        el.querySelector(`.rot-period-panel[data-period="${period}"]`).style.display = 'block';
+      });
+    });
   } catch(e) {
-    console.error('[Rotation] error', e);
-    el.innerHTML = '<div style="text-align:center;padding-top:180px;color:var(--red)">❌ 图表渲染失败: ' + e.message + '</div>';
+    el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">加载失败: ' + e.message + '</p>';
   }
 }
 
-// ── Correlation Table (HTML table, much clearer than heatmap) ──
+// ── Correlation Network Graph (force-directed, far more intuitive than matrix) ──
 async function renderCorrelationChart() {
   const el = document.getElementById('correlationChart');
   if (!el) return;
   el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">加载中...</div></div>';
   try {
-    console.log('[Correlation] fetching', apiBase('/correlation'));
     const resp = await fetch(apiBase('/correlation'));
     const data = await resp.json();
-    console.log('[Correlation] response', data.error || ('names=' + (data.names||[]).length));
-    if (data.error) {
-      el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">📭 该市场相关性矩阵数据暂未生成，请稍后再试<br><span style="font-size:12px">原因: ' + data.error + '</span></div>';
-      return;
-    }
+    if (data.error) { el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px">暂无数据</p>'; return; }
     const names = data.names || [];
     const matrix = data.matrix || [];
-    if (names.length === 0) {
-      el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">📭 暂无相关性数据</div>';
-      return;
-    }
-    if (!Array.isArray(matrix) || matrix.length !== names.length) {
-      el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--red)">❌ 数据格式错误</div>';
-      return;
-    }
-    console.log('[Correlation] rendering table', names.length, 'x', names.length);
+    if (!names.length) { el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px">暂无数据</p>'; return; }
 
-    // Build HTML table
-    let html = '<div style="overflow:auto;max-height:600px;max-width:100%"><table style="border-collapse:collapse;font-size:12px;white-space:nowrap">';
-
-    // Header row with rotated labels
-    html += '<thead><tr><th style="position:sticky;left:0;top:0;z-index:2;background:var(--card);padding:4px 8px;min-width:100px;text-align:left;color:var(--muted);font-size:11px">板块</th>';
-    for (let j = 0; j < names.length; j++) {
-      html += '<th style="position:sticky;top:0;z-index:1;background:var(--card);padding:4px 2px;color:var(--muted);font-size:10px;writing-mode:vertical-rl;text-orientation:mixed;height:90px;width:28px;text-align:left">' + names[j] + '</th>';
-    }
-    html += '</tr></thead><tbody>';
-
-    // Data rows
-    for (let i = 0; i < names.length; i++) {
-      html += '<tr>';
-      // Sticky row label
-      html += '<td style="position:sticky;left:0;background:var(--card);padding:3px 8px;font-weight:600;font-size:11px;color:var(--text);white-space:nowrap;border-bottom:1px solid rgba(255,255,255,0.03)">' + names[i] + '</td>';
+    // Build nodes and edges
+    const nodes = names.map((n, i) => {
+      // Average correlation for node sizing
+      let sumAbs = 0, cnt = 0;
       for (let j = 0; j < names.length; j++) {
-        const v = (matrix[i] && matrix[i][j] != null && !isNaN(matrix[i][j])) ? +matrix[i][j] : 0;
-        // Color: red for positive correlation, green for negative, grey for neutral
-        const absV = Math.abs(v);
-        const alpha = absV.toFixed(2);
-        let bg;
-        if (v > 0) {
-          bg = `rgba(239,68,68,${alpha})`;
-        } else if (v < 0) {
-          bg = `rgba(34,197,94,${alpha})`;
-        } else {
-          bg = 'transparent';
+        if (i !== j && matrix[i] && matrix[i][j] != null && !isNaN(matrix[i][j])) {
+          sumAbs += Math.abs(matrix[i][j]); cnt++;
         }
-        // Text: bold for strong correlation
-        const fw = absV > 0.7 ? '700' : absV > 0.4 ? '500' : '400';
-        const tc = absV > 0.5 ? '#fff' : 'var(--muted)';
-        html += '<td style="text-align:center;padding:3px 4px;background:' + bg + ';font-weight:' + fw + ';color:' + tc + ';font-size:10px;border-bottom:1px solid rgba(255,255,255,0.03)" title="' + names[i] + ' ↔ ' + names[j] + ': ' + v.toFixed(2) + '">' + v.toFixed(2) + '</td>';
       }
-      html += '</tr>';
+      const avgCorr = cnt > 0 ? sumAbs / cnt : 0;
+      return {
+        name: n,
+        symbolSize: 18 + avgCorr * 30,
+        itemStyle: { color: `hsl(${220 + i * 17 % 140}, 60%, ${55 + avgCorr * 20}%)` },
+        label: { show: true, fontSize: 11, color: '#e2e8f0' },
+      };
+    });
+
+    // Only show strong correlations (|r| > 0.5) to keep graph readable
+    const edges = [];
+    for (let i = 0; i < names.length; i++) {
+      for (let j = i + 1; j < names.length; j++) {
+        const v = (matrix[i] && matrix[i][j] != null && !isNaN(matrix[i][j])) ? +matrix[i][j] : 0;
+        const absV = Math.abs(v);
+        if (absV > 0.5) {
+          edges.push({
+            source: names[i],
+            target: names[j],
+            value: absV,
+            lineStyle: {
+              color: v > 0 ? 'rgba(239,68,68,0.6)' : 'rgba(34,197,94,0.6)',
+              width: 1 + absV * 4,
+              curveness: 0.15,
+              opacity: 0.5 + absV * 0.5,
+            },
+            label: { show: absV > 0.75, fontSize: 9, color: '#94a3b8', formatter: v.toFixed(2) },
+          });
+        }
+      }
     }
-    html += '</tbody></table></div>';
 
-    // Legend
-    html += '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:11px;color:var(--muted);justify-content:center">' +
-      '<span>负相关</span><span style="display:inline-block;width:80px;height:10px;border-radius:5px;background:linear-gradient(to right,#22c55e,#334155,#ef4444)"></span><span>正相关</span>' +
-      '<span style="margin-left:12px">| 系数范围: -1 ~ +1 | 鼠标悬停查看详情</span></div>';
+    el.style.height = '650px';
+    el.innerHTML = '';
 
-    el.innerHTML = html;
-    window._corrChart = null;
-    console.log('[Correlation] table rendered ok');
+    if (window._corrChart) { window._corrChart.dispose(); window._corrChart = null; }
+    const chart = echarts.init(el, 'dark');
+    window._corrChart = chart;
+
+    chart.setOption({
+      tooltip: {
+        formatter: p => {
+          if (p.dataType === 'edge') return p.data.source + ' ↔ ' + p.data.target + '<br>相关系数: <b>' + p.data.value.toFixed(2) + '</b>';
+          return '<b>' + p.data.name + '</b><br>平均相关度: ' + ((p.data.symbolSize - 18) / 30).toFixed(2);
+        }
+      },
+      legend: {
+        data: ['正相关(r>0.5)', '负相关(r<-0.5)'],
+        bottom: 10,
+        textStyle: { color: '#94a3b8', fontSize: 11 },
+      },
+      series: [{
+        type: 'graph',
+        layout: 'force',
+        roam: true,
+        draggable: true,
+        force: { repulsion: 300, edgeLength: [80, 300], gravity: 0.08, friction: 0.6 },
+        data: nodes,
+        links: edges,
+        edgeSymbol: ['none', 'none'],
+        emphasis: { focus: 'adjacency', lineStyle: { width: 5 } },
+      }]
+    });
+
+    // Add a hint
+    const hint = document.createElement('div');
+    hint.style.cssText = 'text-align:center;font-size:11px;color:var(--muted);margin-top:8px';
+    hint.textContent = '🖱️ 拖拽节点 | 滚轮缩放 | 红色连线=正相关 绿色连线=负相关 | 节点越大=关联越多 | 仅显示|r|>0.5';
+    el.parentElement.appendChild(hint);
+
+    console.log('[Correlation] graph rendered:', nodes.length, 'nodes,', edges.length, 'edges');
   } catch(e) {
     console.error('[Correlation] error', e);
-    el.innerHTML = '<div style="text-align:center;padding-top:180px;color:var(--red)">❌ 图表渲染失败: ' + e.message + '</div>';
+    el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">加载失败: ' + e.message + '</p>';
   }
 }
 
