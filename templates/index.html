@@ -1263,86 +1263,51 @@ async function renderRotationChart() {
       el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">📭 暂无板块轮动数据</div>';
       return;
     }
-    sectors.sort((a, b) => {
-      const ca = a.category || '';
-      const cb = b.category || '';
-      const ci = ca.localeCompare(cb);
-      if (ci !== 0) return ci;
-      return (b.d60 || -999) - (a.d60 || -999);
-    });
-    const xLabels = ['1日', '5日', '20日', '60日'];
-    const yLabels = sectors.map(s => (s.name || '') + ' (' + (s.category || '') + ')');
-    const heatmapData = [];
-    for (let i = 0; i < sectors.length; i++) {
-      for (let j = 0; j < 4; j++) {
-        const v = [sectors[i].d1, sectors[i].d5, sectors[i].d20, sectors[i].d60][j];
-        const num = (v === null || v === undefined || isNaN(v)) ? null : +v.toFixed(2);
-        heatmapData.push([j, i, num]);
-      }
-    }
-    console.log('[Rotation] rendering', heatmapData.length, 'cells');
-    if (window._rotChart) { window._rotChart.dispose(); window._rotChart = null; }
+    sectors.sort((a, b) => (b.d60 || -999) - (a.d60 || -999));
+    const labels = sectors.map(s => (s.name || '') + ' (' + (s.category || '') + ')');
 
-    const showLabel = sectors.length <= 40;
-    const fontSize = sectors.length <= 25 ? 13 : 11;
-    const axisFontSize = sectors.length <= 25 ? 14 : 12;
-
-    // Dynamic height: each row at least 32px
-    const rowH = 32;
-    const totalH = Math.max(700, sectors.length * rowH + 160);
+    const rowH = 28;
+    const totalH = Math.max(500, sectors.length * rowH + 80);
+    // Create canvas element
+    el.innerHTML = '<canvas id="rotationCanvas"></canvas>';
     el.style.height = totalH + 'px';
+    const canvas = document.getElementById('rotationCanvas');
+    if (window._rotChart) { window._rotChart.destroy(); window._rotChart = null; }
 
-    const chart = echarts.init(el, 'dark');
-    window._rotChart = chart;
-
-    chart.setOption({
-      tooltip: {
-        position: 'top',
-        backgroundColor: 'rgba(30,41,59,0.95)',
-        borderColor: '#334155',
-        textStyle: { fontSize: 14, color: '#e2e8f0' },
-        formatter: p => {
-          const v = p.data[2];
-          const color = v > 0 ? '#ef4444' : v < 0 ? '#22c55e' : '#94a3b8';
-          return yLabels[p.data[1]] + '<br>' + xLabels[p.data[0]] + ': ' +
-            '<span style="color:' + color + ';font-weight:700">' + (v != null ? v + '%' : '无数据') + '</span>';
+    const ctx = canvas.getContext('2d');
+    window._rotChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: '1日涨跌',  data: sectors.map(s => s.d1  ?? 0), backgroundColor: sectors.map(s => (s.d1??0)>=0?'rgba(239,68,68,.7)':'rgba(34,197,94,.7)'), borderRadius: 3 },
+          { label: '5日涨跌',  data: sectors.map(s => s.d5  ?? 0), backgroundColor: sectors.map(s => (s.d5??0)>=0?'rgba(251,146,60,.7)':'rgba(34,197,160,.7)'), borderRadius: 3 },
+          { label: '20日涨跌', data: sectors.map(s => s.d20 ?? 0), backgroundColor: sectors.map(s => (s.d20??0)>=0?'rgba(250,204,21,.7)':'rgba(45,212,191,.7)'), borderRadius: 3 },
+          { label: '60日涨跌', data: sectors.map(s => s.d60 ?? 0), backgroundColor: sectors.map(s => (s.d60??0)>=0?'rgba(168,85,247,.7)':'rgba(52,211,153,.7)'), borderRadius: 3 },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        indexAxis: 'y',
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { position: 'top', labels: { color: '#94a3b8', font: { size: 12 }, usePointStyle: true, pointStyleWidth: 12 } },
+          tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + (ctx.raw>0?'+':'') + ctx.raw.toFixed(2) + '%' } }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,.05)' }, ticks: { color: '#94a3b8', callback: v => v+'%' } },
+          y: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 11 }, autoSkip: false } }
         }
-      },
-      grid: { top: 30, bottom: 80, left: 150, right: 40 },
-      xAxis: {
-        type: 'category', data: xLabels,
-        axisLabel: { color: '#e2e8f0', fontSize: axisFontSize, fontWeight: 'bold', margin: 14 },
-        axisLine: { lineStyle: { color: '#334155' } },
-        splitArea: { show: true }
-      },
-      yAxis: {
-        type: 'category', data: yLabels,
-        axisLabel: { color: '#e2e8f0', fontSize: axisFontSize, margin: 12 },
-        axisLine: { lineStyle: { color: '#334155' } },
-        inverse: true,
-        splitArea: { show: true }
-      },
-      visualMap: {
-        min: -12, max: 12, calculable: true, orient: 'horizontal', left: 'center', bottom: 10,
-        text: ['强势 +12%', '弱势 -12%'], textStyle: { color: '#e2e8f0', fontSize: 13 },
-        inRange: { color: ['#22c55e', '#f59e0b', '#1e293b', '#ef4444'] },
-        itemWidth: 20, itemHeight: 12
-      },
-      series: [{
-        name: '涨跌幅', type: 'heatmap', data: heatmapData,
-        label: { show: showLabel, fontSize: fontSize, fontWeight: 'bold', color: '#fff', formatter: p => p.data[2] != null ? p.data[2] + '%' : '' },
-        itemStyle: { borderColor: '#1e293b', borderWidth: 1, borderRadius: 4 },
-        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } }
-      }]
+      }
     });
     console.log('[Rotation] rendered ok');
   } catch(e) {
     console.error('[Rotation] error', e);
-    el.innerHTML = '<div style="text-align:center;padding-top:180px;color:var(--red)">❌ 图表渲染失败: ' + e.message + '<br><span style="color:var(--muted);font-size:12px">请按 F12 打开控制台查看详细报错</span></div>';
+    el.innerHTML = '<div style="text-align:center;padding-top:180px;color:var(--red)">❌ 图表渲染失败: ' + e.message + '</div>';
   }
 }
 
-// ── Correlation Matrix ──
+// ── Correlation Table (HTML table, much clearer than heatmap) ──
 async function renderCorrelationChart() {
   const el = document.getElementById('correlationChart');
   if (!el) return;
@@ -1362,89 +1327,60 @@ async function renderCorrelationChart() {
       el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--muted)">📭 暂无相关性数据</div>';
       return;
     }
-    // Validate matrix dimensions
     if (!Array.isArray(matrix) || matrix.length !== names.length) {
-      console.error('[Correlation] matrix dimension mismatch', matrix.length, 'vs', names.length);
-      el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--red)">❌ 数据格式错误: 矩阵维度不匹配</div>';
+      el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--red)">❌ 数据格式错误</div>';
       return;
     }
-    const heatData = [];
-    for (let i = 0; i < names.length; i++) {
-      if (!Array.isArray(matrix[i]) || matrix[i].length !== names.length) {
-        console.error('[Correlation] matrix row invalid at', i, matrix[i]);
-        el.innerHTML = '<div style="text-align:center;padding-top:200px;color:var(--red)">❌ 数据格式错误: 矩阵行数据不完整</div>';
-        return;
-      }
-      for (let j = 0; j < names.length; j++) {
-        const v = matrix[i][j];
-        const num = (v === null || v === undefined || isNaN(v)) ? 0 : +v;
-        heatData.push([j, i, num]);
-      }
+    console.log('[Correlation] rendering table', names.length, 'x', names.length);
+
+    // Build HTML table
+    let html = '<div style="overflow:auto;max-height:600px;max-width:100%"><table style="border-collapse:collapse;font-size:12px;white-space:nowrap">';
+
+    // Header row with rotated labels
+    html += '<thead><tr><th style="position:sticky;left:0;top:0;z-index:2;background:var(--card);padding:4px 8px;min-width:100px;text-align:left;color:var(--muted);font-size:11px">板块</th>';
+    for (let j = 0; j < names.length; j++) {
+      html += '<th style="position:sticky;top:0;z-index:1;background:var(--card);padding:4px 2px;color:var(--muted);font-size:10px;writing-mode:vertical-rl;text-orientation:mixed;height:90px;width:28px;text-align:left">' + names[j] + '</th>';
     }
-    console.log('[Correlation] rendering', names.length, 'x', names.length, 'cells=', heatData.length);
-    if (window._corrChart) { window._corrChart.dispose(); window._corrChart = null; }
-    const chart = echarts.init(el, 'dark');
-    window._corrChart = chart;
+    html += '</tr></thead><tbody>';
 
-    // Adjust label visibility based on density
-    const showLabel = names.length <= 35;
-    const fontSize = names.length <= 20 ? 12 : (names.length <= 30 ? 10 : 9);
-    const axisFontSize = names.length <= 20 ? 13 : 11;
-    const rotate = names.length > 25 ? 45 : 35;
-
-    // Dynamic height: each row at least 22px
-    const cellH = 30;
-    const totalH = Math.max(700, names.length * cellH + 160);
-    el.style.height = totalH + 'px';
-
-    chart.setOption({
-      tooltip: {
-        position: 'top',
-        backgroundColor: 'rgba(30,41,59,0.95)',
-        borderColor: '#334155',
-        textStyle: { fontSize: 14, color: '#e2e8f0' },
-        formatter: p => {
-          const v = p.data[2];
-          const color = v > 0 ? '#ef4444' : v < 0 ? '#22c55e' : '#94a3b8';
-          return names[p.data[1]] + ' ↔ ' + names[p.data[0]] + '<br>相关系数: ' +
-            '<span style="color:' + color + ';font-weight:700">' + v.toFixed(2) + '</span>';
+    // Data rows
+    for (let i = 0; i < names.length; i++) {
+      html += '<tr>';
+      // Sticky row label
+      html += '<td style="position:sticky;left:0;background:var(--card);padding:3px 8px;font-weight:600;font-size:11px;color:var(--text);white-space:nowrap;border-bottom:1px solid rgba(255,255,255,0.03)">' + names[i] + '</td>';
+      for (let j = 0; j < names.length; j++) {
+        const v = (matrix[i] && matrix[i][j] != null && !isNaN(matrix[i][j])) ? +matrix[i][j] : 0;
+        // Color: red for positive correlation, green for negative, grey for neutral
+        const absV = Math.abs(v);
+        const alpha = absV.toFixed(2);
+        let bg;
+        if (v > 0) {
+          bg = `rgba(239,68,68,${alpha})`;
+        } else if (v < 0) {
+          bg = `rgba(34,197,94,${alpha})`;
+        } else {
+          bg = 'transparent';
         }
-      },
-      grid: { top: 30, bottom: 80, left: 140, right: 40 },
-      xAxis: {
-        type: 'category', data: names,
-        axisLabel: { color: '#e2e8f0', fontSize: axisFontSize, fontWeight: 'bold', rotate: rotate, margin: 14 },
-        axisLine: { lineStyle: { color: '#334155' } },
-        splitArea: { show: true }
-      },
-      yAxis: {
-        type: 'category', data: names,
-        axisLabel: { color: '#e2e8f0', fontSize: axisFontSize, margin: 12 },
-        axisLine: { lineStyle: { color: '#334155' } },
-        inverse: true,
-        splitArea: { show: true }
-      },
-      visualMap: {
-        min: -1, max: 1, calculable: true, orient: 'horizontal', left: 'center', bottom: 10,
-        text: ['正相关 +1', '负相关 -1'], textStyle: { color: '#e2e8f0', fontSize: 13 },
-        inRange: { color: ['#22c55e', '#f59e0b', '#1e293b', '#ef4444'] },
-        itemWidth: 20, itemHeight: 12
-      },
-      dataZoom: [
-        { type: 'inside', xAxisIndex: 0, start: 0, end: 100 },
-        { type: 'inside', yAxisIndex: 0, start: 0, end: 100 }
-      ],
-      series: [{
-        name: '相关系数', type: 'heatmap', data: heatData,
-        label: { show: showLabel, fontSize: fontSize, fontWeight: 'bold', color: '#fff', formatter: p => p.data[2].toFixed(2) },
-        itemStyle: { borderColor: '#1e293b', borderWidth: 1, borderRadius: 4 },
-        emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.5)' } }
-      }]
-    });
-    console.log('[Correlation] rendered ok');
+        // Text: bold for strong correlation
+        const fw = absV > 0.7 ? '700' : absV > 0.4 ? '500' : '400';
+        const tc = absV > 0.5 ? '#fff' : 'var(--muted)';
+        html += '<td style="text-align:center;padding:3px 4px;background:' + bg + ';font-weight:' + fw + ';color:' + tc + ';font-size:10px;border-bottom:1px solid rgba(255,255,255,0.03)" title="' + names[i] + ' ↔ ' + names[j] + ': ' + v.toFixed(2) + '">' + v.toFixed(2) + '</td>';
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+
+    // Legend
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:11px;color:var(--muted);justify-content:center">' +
+      '<span>负相关</span><span style="display:inline-block;width:80px;height:10px;border-radius:5px;background:linear-gradient(to right,#22c55e,#334155,#ef4444)"></span><span>正相关</span>' +
+      '<span style="margin-left:12px">| 系数范围: -1 ~ +1 | 鼠标悬停查看详情</span></div>';
+
+    el.innerHTML = html;
+    window._corrChart = null;
+    console.log('[Correlation] table rendered ok');
   } catch(e) {
     console.error('[Correlation] error', e);
-    el.innerHTML = '<div style="text-align:center;padding-top:180px;color:var(--red)">❌ 图表渲染失败: ' + e.message + '<br><span style="color:var(--muted);font-size:12px">请按 F12 打开控制台查看详细报错</span></div>';
+    el.innerHTML = '<div style="text-align:center;padding-top:180px;color:var(--red)">❌ 图表渲染失败: ' + e.message + '</div>';
   }
 }
 
