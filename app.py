@@ -93,23 +93,29 @@ def _extract_tickers_from_text(text):
 def _fetch_kol_tweets_via_nitter(handle, name):
     """Fetch recent tweets for a KOL via Nitter RSS. Returns list of articles."""
     articles = []
-    # Try multiple Nitter instances for reliability
+    # Try multiple Nitter instances for reliability (with delay between attempts)
     instances = [
         'https://nitter.net',
         'https://nitter.poast.org',
+        'https://nitter.1d4.us',
+        'https://nitter.privacydev.net',
     ]
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
         'Accept': 'application/rss+xml, application/xml, text/xml, */*',
         'Accept-Language': 'en-US,en;q=0.9',
     }
-    for instance in instances:
+    for idx, instance in enumerate(instances):
         try:
+            if idx > 0:
+                time.sleep(2)  # Delay between instance attempts
             url = f"{instance}/{handle}/rss"
             resp = requests.get(url, headers=headers, timeout=12)
             if resp.status_code != 200 or len(resp.text) < 200:
+                print(f"[KOL] Nitter {instance}/{handle} returned {resp.status_code}, len={len(resp.text)}")
                 continue
             root = ET.fromstring(resp.text)
+            item_count = 0
             for item in root.findall('.//item'):
                 title_el = item.find('title')
                 link_el = item.find('link')
@@ -121,13 +127,13 @@ def _fetch_kol_tweets_via_nitter(handle, name):
                 desc = desc_el.text.strip() if desc_el is not None and desc_el.text else ''
                 if not title:
                     continue
+                item_count += 1
                 # Extract stock tickers and match to sectors
                 tickers = _extract_tickers_from_text(title + ' ' + desc)
                 matched_sectors = set()
                 for t in tickers:
                     secs = _ticker_sector_map.get(t.lower(), [])
                     matched_sectors.update(secs)
-                # Also tag with KOL's focus areas
                 articles.append({
                     'title': f'🐦 {name}: {title}',
                     'link': link,
@@ -137,10 +143,13 @@ def _fetch_kol_tweets_via_nitter(handle, name):
                     'kol': name,
                     'tickers': list(tickers),
                 })
-            break  # success, don't try other instances
+            print(f"[KOL] Got {item_count} tweets from {instance}/{handle}")
+            break  # success
         except Exception as e:
             print(f"[KOL] Nitter error for {handle} via {instance}: {e}")
             continue
+    if not articles:
+        print(f"[KOL] WARNING: No tweets fetched for {handle} from any instance")
     return articles
 
 def _fetch_all_kol_tweets(market='us'):
@@ -1739,6 +1748,29 @@ def cn_daily_fetch_job():
     data = fetch_cn_sector_data(y)
     if data: save_cn_to_db(data, y)
 
+def _warmup_kol_cache():
+    """Prefetch KOL tweets to populate cache at startup."""
+    print("[KOL] Warming up KOL tweet cache...")
+    try:
+        us_tweets = _fetch_all_kol_tweets('us')
+        cn_tweets = _fetch_all_kol_tweets('cn')
+        print(f"[KOL] Cache warmed: {len(us_tweets)} US + {len(cn_tweets)} CN tweets")
+    except Exception as e:
+        print(f"[KOL] Cache warmup failed: {e}")
+
+def _refresh_kol_cache():
+    """Periodic refresh of KOL tweet cache."""
+    print("[KOL] Refreshing KOL tweet cache...")
+    try:
+        with _news_cache_lock:
+            _kol_cache.pop('us', None)
+            _kol_cache.pop('cn', None)
+        _fetch_all_kol_tweets('us')
+        _fetch_all_kol_tweets('cn')
+        print("[KOL] Cache refreshed")
+    except Exception as e:
+        print(f"[KOL] Cache refresh failed: {e}")
+
 scheduler = BackgroundScheduler(timezone='Asia/Shanghai')
 # 美股: 每天早上4点、5点更新（北京时间）
 scheduler.add_job(daily_fetch_job, 'cron', hour=4, minute=0)
@@ -1746,7 +1778,17 @@ scheduler.add_job(daily_fetch_job, 'cron', hour=5, minute=0)
 # A股: 每天下午14:30、15:30更新（北京时间）
 scheduler.add_job(cn_daily_fetch_job, 'cron', hour=14, minute=30)
 scheduler.add_job(cn_daily_fetch_job, 'cron', hour=15, minute=30)
+# KOL tweets: refresh every 30 minutes
+scheduler.add_job(_refresh_kol_cache, 'interval', minutes=30)
 scheduler.start()
+
+# Warm up KOL cache shortly after startup (in background thread)
+def _delayed_warmup():
+    time.sleep(10)  # Wait 10s for app to fully start
+    _build_ticker_sector_map()
+    _warmup_kol_cache()
+
+threading.Thread(target=_delayed_warmup, daemon=True).start()
 
 # ── Quant Backtest Engine ────────────────────────────────────
 def run_backtest(prices, strategy, params):
