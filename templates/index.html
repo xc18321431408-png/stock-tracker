@@ -279,6 +279,8 @@ canvas{max-height:380px}
       <option value="rsi">RSI 均值回归</option>
       <option value="momentum">动量突破 (Momentum)</option>
       <option value="sector_rotation">行业轮动 (Sector Rotation)</option>
+      <option value="skew_arb">Skew套利 (波动率偏斜)</option>
+      <option value="vol_surface">波动率曲面套利</option>
     </select>
 
     <div id="btParams"></div>
@@ -921,6 +923,16 @@ function updateParams() {
     html = '<label>回看天数</label><input type="number" id="pLookback" value="20" min="5" max="120">';
   } else if (strat === 'sector_rotation') {
     html = '<label>动量回看天数</label><input type="number" id="pLookback" value="5" min="3" max="30">';
+  } else if (strat === 'skew_arb') {
+    html = '<label>短期波动率窗口(天)</label><input type="number" id="pShortWin" value="5" min="2" max="20">'
+         + '<label>长期波动率窗口(天)</label><input type="number" id="pLongWin" value="20" min="10" max="60">'
+         + '<label>入场阈值(短期/长期比值)</label><input type="number" id="pEntryRatio" value="1.5" min="1.2" max="3.0" step="0.1">'
+         + '<div style="font-size:11px;color:var(--muted);margin-top:4px">HV5/HV20 > 阈值 → 恐慌做多 | < 倒数 → 平淡做空</div>';
+  } else if (strat === 'vol_surface') {
+    html = '<label>布林带周期</label><input type="number" id="pBBPeriod" value="20" min="10" max="60">'
+         + '<label>标准差倍数</label><input type="number" id="pBBStd" value="2.0" min="1.0" max="3.0" step="0.1">'
+         + '<label>宽度阈值</label><input type="number" id="pEntryThresh" value="2.0" min="0.5" max="5.0" step="0.1">'
+         + '<div style="font-size:11px;color:var(--muted);margin-top:4px">布林带宽度 > 阈值 → 波动率收缩做多 | 极窄 → 扩张做空</div>';
   }
   document.getElementById('btParams').innerHTML = html;
 }
@@ -939,6 +951,14 @@ async function runBacktest() {
     params.overbought = parseInt(document.getElementById('pOverbought')?.value || 70);
   } else if (strategy === 'momentum' || strategy === 'sector_rotation') {
     params.lookback = parseInt(document.getElementById('pLookback')?.value || 20);
+  } else if (strategy === 'skew_arb') {
+    params.short_window = parseInt(document.getElementById('pShortWin')?.value || 5);
+    params.long_window = parseInt(document.getElementById('pLongWin')?.value || 20);
+    params.entry_ratio = parseFloat(document.getElementById('pEntryRatio')?.value || 1.5);
+  } else if (strategy === 'vol_surface') {
+    params.bb_period = parseInt(document.getElementById('pBBPeriod')?.value || 20);
+    params.bb_std = parseFloat(document.getElementById('pBBStd')?.value || 2.0);
+    params.entry_thresh = parseFloat(document.getElementById('pEntryThresh')?.value || 2.0);
   }
 
   document.getElementById('btResult').innerHTML = '<h3>📋 回测结果</h3><p style="color:var(--muted)">⏳ 正在计算...</p>';

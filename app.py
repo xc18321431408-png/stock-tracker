@@ -1889,6 +1889,50 @@ def run_backtest(prices, strategy, params):
             if mom > 0.02: signals[i] = 1
             elif mom < -0.02: signals[i] = -1
 
+    elif strategy == 'skew_arb':
+        # Skew Arbitrage: trade volatility mean-reversion using HV ratio
+        # When short-term vol spikes vs long-term vol → fear → buy (bet on calm return)
+        # When short-term vol collapses → complacency → sell
+        short_window = params.get('short_window', 5)
+        long_window = params.get('long_window', 20)
+        entry_ratio = params.get('entry_ratio', 1.5)
+        for i in range(long_window + 1, n):
+            # Calculate historical volatility for short and long windows
+            short_rets = [(prices[j] - prices[j-1]) / prices[j-1] for j in range(i-short_window+1, i+1) if prices[j-1] > 0]
+            long_rets = [(prices[j] - prices[j-1]) / prices[j-1] for j in range(i-long_window+1, i+1) if prices[j-1] > 0]
+            if len(short_rets) < 3 or len(long_rets) < 5: continue
+            hv_short = (sum((r - sum(short_rets)/len(short_rets))**2 for r in short_rets) / len(short_rets)) ** 0.5
+            hv_long = (sum((r - sum(long_rets)/len(long_rets))**2 for r in long_rets) / len(long_rets)) ** 0.5
+            if hv_long <= 0: continue
+            ratio = hv_short / hv_long
+            if ratio > entry_ratio:
+                signals[i] = 1   # vol spike → panic → buy
+            elif ratio < (1 / entry_ratio):
+                signals[i] = -1  # vol crush → complacency → sell
+            elif ratio < 1.2 and ratio > 0.85:
+                signals[i] = signals[i-1]  # hold position during normal vol
+
+    elif strategy == 'vol_surface':
+        # Vol Surface Arbitrage: trade term structure dislocation using Bollinger Band Width
+        # BBW = (upper - lower) / middle, proxy for volatility term structure
+        # Wide bands → dislocation → bet on contraction; Narrow bands → bet on expansion
+        bb_period = params.get('bb_period', 20)
+        bb_std = params.get('bb_std', 2.0)
+        entry_thresh = params.get('entry_thresh', 2.0)
+        for i in range(bb_period, n):
+            window = prices[i-bb_period:i]
+            ma = sum(window) / bb_period
+            variance = sum((p - ma)**2 for p in window) / bb_period
+            std = variance ** 0.5
+            if ma <= 0: continue
+            upper = ma + bb_std * std
+            lower = ma - bb_std * std
+            bbw = (upper - lower) / ma  # Bollinger Band Width
+            if bbw > entry_thresh:
+                signals[i] = 1   # extreme width → bet on volatility contraction → buy
+            elif bbw < 0.03:
+                signals[i] = -1  # extremely narrow → bet on expansion → sell
+
     # Calculate positions & returns
     for i in range(1, n):
         if signals[i] == 1: position[i] = 1
