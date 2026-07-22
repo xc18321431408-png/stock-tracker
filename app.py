@@ -1673,37 +1673,44 @@ def save_to_db(data, target_date):
 
 # ── China A-Share Data Fetching ──────────────────────────────
 def fetch_cn_sector_data(target_date=None):
-    """Fetch A-share ETF data from East Money API (more reliable for CN stocks)."""
+    """Fetch A-share ETF data from Yahoo Finance."""
     results = []
     fail_count = 0
     for category, symbol, name in CN_SECTORS:
         try:
-            code = symbol.replace('.SS','').replace('.SZ','').replace('.BJ','')
-            mkt = '1' if '.SS' in symbol else ('0' if '.SZ' in symbol else '0')
-            secid = f"{mkt}.{code}"
-            url = f"https://push2.eastmoney.com/api/qt/stock/get?secid={secid}&fields=f43,f44,f45,f46,f47,f48,f57,f58,f60,f169,f170"
-            resp = requests.get(url, headers=YF_HEADERS, timeout=8)
+            # Use full symbol with suffix for Yahoo Finance CN ETFs
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
+            resp = requests.get(url, headers=YF_HEADERS, timeout=12)
             if resp.status_code != 200:
                 fail_count += 1; continue
-            d = resp.json().get('data')
-            if not d:
+            data = resp.json()
+            r = data.get('chart', {}).get('result', [None])[0]
+            if not r or 'timestamp' not in r:
                 fail_count += 1; continue
-            close = d.get('f43', 0) / 1000 if d.get('f43') else 0
-            open_p = d.get('f46', 0) / 1000 if d.get('f46') else 0
-            high = d.get('f44', 0) / 1000 if d.get('f44') else 0
-            low = d.get('f45', 0) / 1000 if d.get('f45') else 0
-            volume = d.get('f47', 0) or 0
-            change_pct = d.get('f169', 0) / 100 if d.get('f169') else 0
-            change_amt = d.get('f170', 0) / 1000 if d.get('f170') else 0
-            if close <= 0:
-                fail_count += 1; continue
+            timestamps = r.get('timestamp', [])
+            quotes = r.get('indicators', {}).get('quote', [{}])[0]
+            if len(timestamps) < 2: continue
+            closes = quotes.get('close', [])
+            opens = quotes.get('open', [])
+            highs = quotes.get('high', [])
+            lows = quotes.get('low', [])
+            vols = quotes.get('volume', [])
+            valid = [(i, closes[i]) for i in range(len(closes)-1, -1, -1) if closes[i] is not None]
+            if len(valid) < 2: continue
+            latest_idx, prev_idx = valid[0][0], valid[1][0]
+            latest_close = closes[latest_idx]
+            prev_close = closes[prev_idx]
+            change_pct = ((latest_close - prev_close) / prev_close) * 100 if prev_close else 0
             results.append({
                 'symbol': symbol, 'name': name, 'category': category,
-                'open': round(open_p, 2), 'high': round(high, 2),
-                'low': round(low, 2), 'close': round(close, 2),
-                'change_pct': round(change_pct, 2), 'volume': int(volume),
+                'open': round(opens[latest_idx] if opens[latest_idx] else 0, 2),
+                'high': round(highs[latest_idx] if highs[latest_idx] else 0, 2),
+                'low': round(lows[latest_idx] if lows[latest_idx] else 0, 2),
+                'close': round(latest_close, 2),
+                'change_pct': round(change_pct, 2),
+                'volume': int(vols[latest_idx] if vols[latest_idx] else 0),
             })
-            time.sleep(0.1)
+            time.sleep(0.15)
         except Exception as e:
             fail_count += 1
             app.logger.warning(f"CN Fetch fail {symbol}: {e}")
