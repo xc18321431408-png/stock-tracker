@@ -1675,20 +1675,19 @@ def save_to_db(data, target_date):
 def fetch_cn_sector_data(target_date=None):
     """Fetch A-share ETF data from Yahoo Finance."""
     results = []
+    fail_count = 0
     for category, symbol, name in CN_SECTORS:
         try:
-            # Try both Yahoo Finance query endpoints
-            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
-            resp = requests.get(url, headers=YF_HEADERS, timeout=15)
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
+            resp = requests.get(url, headers=YF_HEADERS, timeout=12)
             if resp.status_code != 200:
-                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
-                resp = requests.get(url, headers=YF_HEADERS, timeout=15)
-            if resp.status_code != 200:
-                app.logger.warning(f"CN fetch fail {symbol}: HTTP {resp.status_code}")
+                fail_count += 1
                 continue
             data = resp.json()
             result = data.get('chart', {}).get('result', [None])[0]
-            if not result: continue
+            if not result or 'timestamp' not in result:
+                fail_count += 1
+                continue
             timestamps = result.get('timestamp', [])
             quotes = result.get('indicators', {}).get('quote', [{}])[0]
             if len(timestamps) < 2: continue
@@ -1710,7 +1709,10 @@ def fetch_cn_sector_data(target_date=None):
             })
             time.sleep(0.15)
         except Exception as e:
+            fail_count += 1
             app.logger.warning(f"CN Fetch fail {symbol}: {e}")
+    if fail_count > 0:
+        print(f"[Data] CN fetch: {len(results)} ok, {fail_count} failed out of {len(CN_SECTORS)}")
     return results
 
 def fetch_cn_stock_quotes(stock_list):
