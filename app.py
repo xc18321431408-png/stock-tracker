@@ -1585,27 +1585,40 @@ def headers(resp):
 
 # ── Data Fetching ────────────────────────────────────────────
 def fetch_sector_data(target_date=None):
+    """Fetch US ETF data from Yahoo Finance (more reliable than stockanalysis)."""
     results = []
     for category, symbol, name in SUB_SECTORS:
         try:
-            url = f"https://api.stockanalysis.com/api/symbol/s/{symbol}/history?range=5d"
-            resp = requests.get(url, headers=SA_HEADERS, timeout=15)
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
+            resp = requests.get(url, headers=YF_HEADERS, timeout=15)
             if resp.status_code != 200: continue
             data = resp.json()
-            if 'data' not in data or not data['data']: continue
-            items = data['data']
-            if len(items) < 2: continue
-            latest, prev = items[0], items[1]
-            close = latest.get('c', 0)
-            prev_close = prev.get('c', close)
+            result = data.get('chart', {}).get('result', [None])[0]
+            if not result: continue
+            timestamps = result.get('timestamp', [])
+            quotes = result.get('indicators', {}).get('quote', [{}])[0]
+            if len(timestamps) < 2: continue
+            close_prices = quotes.get('close', [])
+            open_prices = quotes.get('open', [])
+            highs = quotes.get('high', [])
+            lows = quotes.get('low', [])
+            vols = quotes.get('volume', [])
+            # Get last two valid trading days
+            valid = [(i, close_prices[i]) for i in range(len(close_prices)-1, -1, -1) if close_prices[i] is not None]
+            if len(valid) < 2: continue
+            latest_idx = valid[0][0]; prev_idx = valid[1][0]
+            close = close_prices[latest_idx]; prev_close = close_prices[prev_idx]
             change_pct = ((close - prev_close) / prev_close) * 100 if prev_close else 0
             results.append({
                 'symbol': symbol, 'name': name, 'category': category,
-                'open': round(latest.get('o', 0), 2), 'high': round(latest.get('h', 0), 2),
-                'low': round(latest.get('l', 0), 2), 'close': round(close, 2),
-                'change_pct': round(change_pct, 2), 'volume': int(latest.get('v', 0)),
+                'open': round(open_prices[latest_idx] if open_prices[latest_idx] else 0, 2),
+                'high': round(highs[latest_idx] if highs[latest_idx] else 0, 2),
+                'low': round(lows[latest_idx] if lows[latest_idx] else 0, 2),
+                'close': round(close, 2),
+                'change_pct': round(change_pct, 2),
+                'volume': int(vols[latest_idx] if vols[latest_idx] else 0),
             })
-            time.sleep(0.25)
+            time.sleep(0.2)
         except Exception as e:
             app.logger.warning(f"Fetch fail {symbol}: {e}")
     return results
