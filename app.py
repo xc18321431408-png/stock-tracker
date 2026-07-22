@@ -1624,26 +1624,26 @@ def fetch_sector_data(target_date=None):
     return results
 
 def fetch_stock_quotes(stock_list):
-    """Fetch real-time quotes for a list of (symbol, name, desc) tuples."""
+    """Fetch real-time quotes for a list of (symbol, name, desc) tuples via Yahoo Finance."""
     results = []
     for item in stock_list:
         sym, name, desc = item[0], item[1] if len(item)>1 else sym, item[2] if len(item)>2 else ""
         try:
-            url = f"https://api.stockanalysis.com/api/symbol/s/{sym}/history?range=5d"
-            resp = requests.get(url, headers=SA_HEADERS, timeout=10)
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
+            resp = requests.get(url, headers=YF_HEADERS, timeout=10)
             if resp.status_code != 200: continue
             data = resp.json()
-            if 'data' not in data or not data['data']: continue
-            items = data['data']
-            if len(items) < 2: continue
-            latest, prev = items[0], items[1]
-            close = latest.get('c', 0)
-            prev_close = prev.get('c', close)
+            r = data.get('chart', {}).get('result', [None])[0]
+            if not r: continue
+            closes = r.get('indicators', {}).get('quote', [{}])[0].get('close', [])
+            valid = [c for c in closes if c is not None]
+            if len(valid) < 2: continue
+            close, prev_close = valid[-1], valid[-2]
             change_pct = ((close - prev_close) / prev_close) * 100 if prev_close else 0
             results.append({
                 'symbol': sym, 'name': name, 'desc': desc,
                 'close': round(close, 2), 'change_pct': round(change_pct, 2),
-                'volume': int(latest.get('v', 0)),
+                'volume': 0,
             })
             time.sleep(0.15)
         except: pass
@@ -2121,27 +2121,36 @@ def api_sector_detail(sector_name):
 
 @app.route('/api/stock/<symbol>/history')
 def api_stock_history(symbol):
-    """Return OHLC history for candlestick chart (3 months)."""
+    """Return OHLC history for candlestick chart (3 months) via Yahoo Finance."""
     try:
-        url = f"https://api.stockanalysis.com/api/symbol/s/{symbol}/history?range=3mo"
-        resp = requests.get(url, headers=SA_HEADERS, timeout=15)
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=3mo"
+        resp = requests.get(url, headers=YF_HEADERS, timeout=15)
         if resp.status_code != 200:
             return jsonify({"error": "fetch failed"}), 500
         data = resp.json()
-        if 'data' not in data or not data['data']:
+        r = data.get('chart', {}).get('result', [None])[0]
+        if not r:
             return jsonify({"error": "no data"}), 500
-        # Return as [date, open, close, low, high] for ECharts candlestick
+        timestamps = r.get('timestamp', [])
+        quotes = r.get('indicators', {}).get('quote', [{}])[0]
+        opens = quotes.get('open', [])
+        closes = quotes.get('close', [])
+        lows = quotes.get('low', [])
+        highs = quotes.get('high', [])
+        volumes = quotes.get('volume', [])
         ohlc = []
-        for item in reversed(data['data']):  # reverse to ascending order
+        for i in range(len(timestamps)):
+            if closes[i] is None: continue
+            dt = datetime.fromtimestamp(timestamps[i]).strftime('%Y-%m-%d')
             ohlc.append([
-                item.get('t', ''),
-                item.get('o', 0),
-                item.get('c', 0),
-                item.get('l', 0),
-                item.get('h', 0),
-                item.get('v', 0),
+                dt,
+                round(opens[i] or 0, 2),
+                round(closes[i] or 0, 2),
+                round(lows[i] or 0, 2),
+                round(highs[i] or 0, 2),
+                int(volumes[i] or 0),
             ])
-        return jsonify({"symbol": symbol, "ohlc": ohlc})
+        return jsonify({"symbol": symbol, "ohlc": ohlc[-90:]})  # last 90 trading days
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -2179,18 +2188,24 @@ def api_backtest():
     strategy = body.get('strategy', 'ma_cross')
     params = body.get('params', {})
 
-    # Fetch historical data
-    url = f"https://api.stockanalysis.com/api/symbol/s/{symbol}/history?range=1y"
+    # Fetch historical data from Yahoo Finance (more reliable)
     try:
-        resp = requests.get(url, headers=SA_HEADERS, timeout=15)
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y"
+        resp = requests.get(url, headers=YF_HEADERS, timeout=15)
         if resp.status_code != 200:
             return jsonify({"error": "无法获取数据"}), 500
         data = resp.json()
-        if 'data' not in data or not data['data']:
+        result_data = data.get('chart', {}).get('result', [None])[0]
+        if not result_data:
             return jsonify({"error": "无历史数据"}), 500
-        prices = [item['c'] for item in data['data'] if item.get('c')]
+        timestamps = result_data.get('timestamp', [])
+        quotes = result_data.get('indicators', {}).get('quote', [{}])[0]
+        closes = quotes.get('close', [])
+        prices = [c for c in closes if c is not None]
         if len(prices) < 50:
             return jsonify({"error": f"数据点不足 (只有{len(prices)}个)"}), 500
+        start_date = datetime.fromtimestamp(timestamps[0]).strftime('%Y-%m-%d') if timestamps else ''
+        end_date = datetime.fromtimestamp(timestamps[-1]).strftime('%Y-%m-%d') if timestamps else ''
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -2203,7 +2218,7 @@ def api_backtest():
         conn.execute('''INSERT INTO backtest_results
             (strategy, symbol, start_date, end_date, total_return, sharpe, max_drawdown, win_rate, trades, params)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-            (strategy, symbol, data['data'][0]['t'], data['data'][-1]['t'],
+            (strategy, symbol, start_date, end_date,
              result['total_return'], result['sharpe'], result['max_drawdown'],
              result['win_rate'], result['trades'], json.dumps(params)))
         conn.commit()
