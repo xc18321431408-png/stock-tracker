@@ -2238,6 +2238,48 @@ def api_backtest_history():
         ).fetchall()
     return jsonify([dict(r) for r in rows])
 
+@app.route('/api/cn/backtest', methods=['POST'])
+def api_cn_backtest():
+    """Run backtest for CN market."""
+    body = request.get_json() or {}
+    symbol = body.get('symbol', '512480.SS').upper()
+    strategy = body.get('strategy', 'ma_cross')
+    params = body.get('params', {})
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y"
+        resp = requests.get(url, headers=YF_HEADERS, timeout=15)
+        if resp.status_code != 200:
+            return jsonify({"error": "无法获取数据"}), 500
+        data = resp.json()
+        result_data = data.get('chart', {}).get('result', [None])[0]
+        if not result_data:
+            return jsonify({"error": "无历史数据"}), 500
+        timestamps = result_data.get('timestamp', [])
+        quotes = result_data.get('indicators', {}).get('quote', [{}])[0]
+        closes = quotes.get('close', [])
+        prices = [c for c in closes if c is not None]
+        if len(prices) < 50:
+            return jsonify({"error": f"数据点不足 (只有{len(prices)}个)"}), 500
+        start_date = datetime.fromtimestamp(timestamps[0]).strftime('%Y-%m-%d') if timestamps else ''
+        end_date = datetime.fromtimestamp(timestamps[-1]).strftime('%Y-%m-%d') if timestamps else ''
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    result = run_backtest(prices, strategy, params)
+    if not result:
+        return jsonify({"error": "回测失败"}), 500
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute('''INSERT INTO backtest_results
+            (strategy, symbol, start_date, end_date, total_return, sharpe, max_drawdown, win_rate, trades, params)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (strategy, symbol, start_date, end_date,
+             result['total_return'], result['sharpe'], result['max_drawdown'],
+             result['win_rate'], result['trades'], json.dumps(params)))
+        conn.commit()
+    result['symbol'] = symbol
+    result['strategy'] = strategy
+    result['params'] = params
+    return jsonify(result)
+
 @app.route('/api/health')
 def api_health():
     with sqlite3.connect(DB_PATH) as conn:
