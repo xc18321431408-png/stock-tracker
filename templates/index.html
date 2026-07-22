@@ -969,6 +969,11 @@ async function runBacktest() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ symbol, strategy, params, market })
     });
+    if (!resp.ok) {
+      const text = await resp.text();
+      document.getElementById('btResult').innerHTML = '<h3>📋 回测结果</h3><p style="color:var(--red)">❌ 服务器错误 (HTTP ' + resp.status + ')</p><p style="font-size:11px;color:var(--muted)">' + text.substring(0,200) + '</p>';
+      return;
+    }
     const data = await resp.json();
     if (data.error) {
       document.getElementById('btResult').innerHTML = '<h3>📋 回测结果</h3><p style="color:var(--red)">❌ ' + data.error + '</p>';
@@ -990,7 +995,7 @@ async function runBacktest() {
     document.getElementById('btMeta').textContent = `参数: ${JSON.stringify(params)} | 策略跑赢买入持有: ${data.total_return > data.buy_hold_return ? '✅ 是' : '❌ 否'}`;
     loadBacktestHistory();
   } catch(e) {
-    document.getElementById('btResult').innerHTML = '<h3>📋 回测结果</h3><p style="color:var(--red)">❌ 网络请求失败，请检查服务器是否运行</p><p style="font-size:11px;color:var(--muted)">' + e.message + '</p>';
+    document.getElementById('btResult').innerHTML = '<h3>📋 回测结果</h3><p style="color:var(--red)">❌ 请求失败</p><p style="font-size:11px;color:var(--muted)">错误: ' + e.message + ' | 策略: ' + strategy + ' | 标的: ' + symbol + '</p>';
   }
 }
 
