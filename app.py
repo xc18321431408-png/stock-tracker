@@ -1677,9 +1677,15 @@ def fetch_cn_sector_data(target_date=None):
     results = []
     for category, symbol, name in CN_SECTORS:
         try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
+            # Try both Yahoo Finance query endpoints
+            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
             resp = requests.get(url, headers=YF_HEADERS, timeout=15)
-            if resp.status_code != 200: continue
+            if resp.status_code != 200:
+                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
+                resp = requests.get(url, headers=YF_HEADERS, timeout=15)
+            if resp.status_code != 200:
+                app.logger.warning(f"CN fetch fail {symbol}: HTTP {resp.status_code}")
+                continue
             data = resp.json()
             result = data.get('chart', {}).get('result', [None])[0]
             if not result: continue
@@ -1766,18 +1772,31 @@ def cn_daily_fetch_job():
     if data: save_cn_to_db(data, y)
 
 def _warmup_kol_cache():
-    """Prefetch KOL tweets to populate cache at startup."""
+    """Prefetch KOL tweets and fetch latest data at startup."""
     print("[KOL] Warming up KOL tweet cache...")
     try:
         us_tweets = _fetch_all_kol_tweets('us')
         cn_tweets = _fetch_all_kol_tweets('cn')
         print(f"[KOL] Cache warmed: {len(us_tweets)} US + {len(cn_tweets)} CN tweets")
-        # Invalidate news cache so next API request picks up KOL tweets
         with _news_cache_lock:
             _news_cache.pop('us', None)
             _news_cache.pop('cn', None)
     except Exception as e:
         print(f"[KOL] Cache warmup failed: {e}")
+    # Also try to fetch latest market data at startup
+    print("[Data] Fetching latest market data...")
+    try:
+        today = datetime.now().strftime('%Y-%m-%d')
+        us_data = fetch_sector_data(today)
+        if us_data:
+            save_to_db(us_data, today)
+            print(f"[Data] US: {len(us_data)} sectors saved for {today}")
+        cn_data = fetch_cn_sector_data(today)
+        if cn_data:
+            save_cn_to_db(cn_data, today)
+            print(f"[Data] CN: {len(cn_data)} sectors saved for {today}")
+    except Exception as e:
+        print(f"[Data] Startup fetch failed: {e}")
 
 def _refresh_kol_cache():
     """Periodic refresh of KOL tweet cache."""
