@@ -562,8 +562,8 @@ async function loadDashboard(specificDate) {
       : '<span style="color:var(--blue)">● 已缓存</span>';
     document.getElementById('totalSectors').textContent = allSectors.filter(s=>s.category!=='指数').length;
 
-    // Load rotation data for trend analysis
-    loadRotationForTrends();
+    // Load rotation data for trend analysis (await to ensure data is ready)
+    await loadRotationForTrends();
 
     renderSummary(allSectors);
     renderChart(allSectors);
