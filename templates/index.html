@@ -359,6 +359,7 @@ let allDates = [];
 let currentDateIdx = -1; // -1 = latest (newest date not in slider)
 let isLoading = false;
 let market = 'us'; // 'us' or 'cn'
+let rotData = {}; // rotation data: name_category -> {d1,d5,d20,d60}
 
 function switchMarket(m) {
   if (m === market) return;
@@ -561,6 +562,9 @@ async function loadDashboard(specificDate) {
       : '<span style="color:var(--blue)">● 已缓存</span>';
     document.getElementById('totalSectors').textContent = allSectors.filter(s=>s.category!=='指数').length;
 
+    // Load rotation data for trend analysis
+    loadRotationForTrends();
+
     renderSummary(allSectors);
     renderChart(allSectors);
     renderCategories(allSectors);
@@ -621,6 +625,41 @@ function renderChart(sectors) {
   });
 }
 
+async function loadRotationForTrends() {
+  try {
+    const resp = await fetch(apiBase('/rotation'));
+    const data = await resp.json();
+    if (data.sectors) {
+      rotData = {};
+      for (const s of data.sectors) {
+        const key = (s.name || '') + '|' + (s.category || '');
+        rotData[key] = { d1: s.d1, d5: s.d5, d20: s.d20, d60: s.d60 };
+      }
+    }
+  } catch(e) { rotData = {}; }
+}
+
+function getTrendTag(sector) {
+  const key = (sector.name || '') + '|' + (sector.category || '');
+  const r = rotData[key];
+  if (!r) return { label: '', color: '' };
+  const d20 = r.d20 || 0, d60 = r.d60 || 0, d5 = r.d5 || 0;
+  let label, color, icon;
+  if (d20 > 0 && d60 > 0) {
+    icon = '🔥'; label = '强势上升'; color = 'var(--red)';
+  } else if (d20 > 0 && d60 <= 0) {
+    icon = '📈'; label = '短期回暖'; color = '#f59e0b';
+  } else if (d20 <= 0 && d60 > 0) {
+    icon = '📉'; label = '中期回调'; color = '#f59e0b';
+  } else if (d20 <= 0 && d60 <= 0) {
+    icon = '❄️'; label = '持续走弱'; color = 'var(--green)';
+  }
+  // Add short-term arrow
+  if (d5 > 1) label += ' ↑';
+  else if (d5 < -1) label += ' ↓';
+  return { icon, label, color, d5: r.d5, d20: r.d20, d60: r.d60 };
+}
+
 function renderCategories(sectors) {
   const sub = sectors.filter(s => s.category !== '指数');
   const cats = [...new Set(sub.map(s => s.category))];
@@ -641,13 +680,22 @@ function renderCategories(sectors) {
       const sign = s.change_pct >= 0 ? '+' : '';
       const star = watchlist.includes(s.symbol) ? '⭐' : '☆';
       const inCompare = compareList.findIndex(c => c.symbol === s.symbol) >= 0;
+      const trend = getTrendTag(s);
       html += `<div class="sector-item" onclick="openSectorDetail('${s.name}')">
         <div>
           <div style="display:flex;align-items:center;gap:4px">
             <span onclick="event.stopPropagation();toggleWatch('${s.symbol}')" style="cursor:pointer;font-size:12px" title="关注/取消">${star}</span>
             <strong>${s.name}</strong>
+            ${trend.label ? `<span style="font-size:11px;color:${trend.color};background:${trend.color}15;padding:1px 6px;border-radius:4px;white-space:nowrap">${trend.icon} ${trend.label}</span>` : ''}
           </div>
           <span class="sym">${s.symbol} | ${market==='cn'?'¥':'\$'}${s.close.toFixed(2)}</span>
+          ${trend.d20 !== undefined ? `<div style="display:flex;gap:3px;margin-top:4px;align-items:flex-end;height:14px">
+            ${[trend.d5,trend.d20,trend.d60].map((v,i) => {
+              const w = Math.min(Math.abs(v)/15*40, 40);
+              return `<div style="width:${Math.max(w,2)}px;height:${8+i*3}px;border-radius:2px;background:${v>0?'var(--red)':'var(--green)'};opacity:${0.4+Math.abs(v)/30}" title="${['5日','20日','60日'][i]}: ${v>0?'+':''}${(v||0).toFixed(1)}%"></div>`;
+            }).join('')}
+            <span style="font-size:9px;color:var(--muted);margin-left:2px">5d/20d/60d</span>
+          </div>` : ''}
         </div>
         <div style="text-align:right">
           <div class="chg ${cls}">${sign}${s.change_pct.toFixed(2)}%</div>
