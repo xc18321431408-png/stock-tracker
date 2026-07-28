@@ -151,7 +151,8 @@ canvas{max-height:380px}
   <button class="tab" onclick="switchTab('bubble')">🫧 涨跌气泡图</button>
   <button class="tab" onclick="switchTab('rotation')">🔥 板块轮动</button>
   <button class="tab" onclick="switchTab('correlation')">🔗 相关性矩阵</button>
-  <button class="tab" onclick="switchTab('quant')">📈 量化交易</button>
+  <button class="tab" onclick="switchTab('trends')">📈 趋势分析</button>
+  <button class="tab" onclick="switchTab('quant')">⚙️ 量化交易</button>
 </div>
 
 <!-- ==================== DASHBOARD TAB ==================== -->
@@ -258,6 +259,28 @@ canvas{max-height:380px}
 </div>
 </div>
 
+<!-- ==================== TRENDS TAB ==================== -->
+<div id="tab-trends" style="display:none">
+<div class="header">
+  <div>
+    <h1>📈 <span>板块趋势全景</span></h1>
+    <div class="meta" id="trendsDate"></div>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center">
+    <select id="trendsSort" onchange="renderTrendsPage()" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:8px;font-size:13px">
+      <option value="d60">按60日涨跌排序</option>
+      <option value="d20">按20日涨跌排序</option>
+      <option value="d5">按5日涨跌排序</option>
+      <option value="daily">按当日涨跌排序</option>
+      <option value="name">按名称排序</option>
+    </select>
+  </div>
+</div>
+<div id="trendsContent" style="display:flex;flex-direction:column;gap:24px">
+  <div class="loading-spinner"><div class="spinner"></div><div class="text">加载中...</div></div>
+</div>
+</div>
+
 <!-- ==================== QUANT TAB ==================== -->
 <div id="tab-quant" style="display:none">
 <div class="header">
@@ -340,13 +363,15 @@ canvas{max-height:380px}
 // ── Tab Switching ──
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', (tab==='dashboard'&&i===0)||(tab==='bubble'&&i===1)||(tab==='rotation'&&i===2)||(tab==='correlation'&&i===3)||(tab==='quant'&&i===4));
+    t.classList.toggle('active', (tab==='dashboard'&&i===0)||(tab==='bubble'&&i===1)||(tab==='rotation'&&i===2)||(tab==='correlation'&&i===3)||(tab==='trends'&&i===4)||(tab==='quant'&&i===5));
   });
   document.getElementById('tab-dashboard').style.display = tab==='dashboard'?'block':'none';
   document.getElementById('tab-bubble').style.display = tab==='bubble'?'block':'none';
   document.getElementById('tab-rotation').style.display = tab==='rotation'?'block':'none';
   document.getElementById('tab-correlation').style.display = tab==='correlation'?'block':'none';
+  document.getElementById('tab-trends').style.display = tab==='trends'?'block':'none';
   document.getElementById('tab-quant').style.display = tab==='quant'?'block':'none';
+  if (tab==='trends') renderTrendsPage();
   if (tab==='quant') loadBacktestHistory();
   if (tab==='bubble') renderBubbleChart();
   if (tab==='rotation') renderRotationChart();
@@ -400,6 +425,7 @@ function switchMarket(m) {
       if (text.includes('气泡')) renderBubbleChart();
       else if (text.includes('轮动')) renderRotationChart();
       else if (text.includes('相关')) renderCorrelationChart();
+      else if (text.includes('趋势')) renderTrendsPage();
       else if (text.includes('量化')) loadBacktestHistory();
     }
   });
@@ -1418,6 +1444,121 @@ async function renderRotationChart() {
         el.querySelector(`.rot-period-panel[data-period="${period}"]`).style.display = 'block';
       });
     });
+  } catch(e) {
+    el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">加载失败: ' + e.message + '</p>';
+  }
+}
+
+// ── Trends Page ──
+async function renderTrendsPage() {
+  const el = document.getElementById('trendsContent');
+  el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">加载中...</div></div>';
+  try {
+    const [latestResp, rotResp] = await Promise.all([
+      fetch(apiBase('/latest')),
+      fetch(apiBase('/rotation'))
+    ]);
+    const latest = await latestResp.json();
+    const rot = await rotResp.json();
+    const sectors = (latest.sectors || []).filter(s => s.category !== '指数');
+    const rotSectors = rot.sectors || [];
+
+    // Build lookup: name|cat -> rotation data
+    const rotMap = {};
+    for (const s of rotSectors) {
+      rotMap[(s.name||'')+'|'+(s.category||'')] = s;
+    }
+
+    document.getElementById('trendsDate').textContent = '数据日期: ' + (latest.date || '-') + ' | ' + (latest.fetched==='live'?'实时':'已缓存');
+
+    // Sort
+    const sortBy = document.getElementById('trendsSort')?.value || 'd60';
+    if (sortBy === 'name') {
+      sectors.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+    } else if (sortBy === 'daily') {
+      sectors.sort((a,b) => (b.change_pct||0) - (a.change_pct||0));
+    } else {
+      sectors.sort((a,b) => {
+        const ka = (a.name||'')+'|'+(a.category||'');
+        const kb = (b.name||'')+'|'+(b.category||'');
+        const va = (rotMap[ka]||{})[sortBy] ?? -999;
+        const vb = (rotMap[kb]||{})[sortBy] ?? -999;
+        return vb - va;
+      });
+    }
+
+    // Group by category
+    const cats = {};
+    for (const s of sectors) {
+      const c = s.category || '其他';
+      if (!cats[c]) cats[c] = [];
+      cats[c].push(s);
+    }
+
+    let html = '';
+    for (const [cat, items] of Object.entries(cats)) {
+      html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:var(--card-shadow)">
+        <div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">
+          📂 ${cat}
+          <span style="font-size:12px;color:var(--muted);font-weight:400">${items.length}个板块</span>
+        </div>`;
+
+      for (const s of items) {
+        const cls = (s.change_pct||0) >= 0 ? 'up' : 'down';
+        const sign = (s.change_pct||0) >= 0 ? '+' : '';
+        const key = (s.name||'')+'|'+(s.category||'');
+        const r = rotMap[key] || {};
+        const d5 = r.d5 || 0, d20 = r.d20 || 0, d60 = r.d60 || 0;
+
+        // Trend label
+        let trendLabel, trendColor;
+        if (d20 > 0 && d60 > 0) { trendLabel = '🔥 强势上升'; trendColor = 'var(--red)'; }
+        else if (d20 > 0 && d60 <= 0) { trendLabel = '📈 短期回暖'; trendColor = '#f59e0b'; }
+        else if (d20 <= 0 && d60 > 0) { trendLabel = '📉 中期回调'; trendColor = '#f59e0b'; }
+        else { trendLabel = '❄️ 持续走弱'; trendColor = 'var(--green)'; }
+
+        html += `<div style="display:flex;align-items:center;gap:16px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.03);transition:background .15s"
+            onmouseover="this.style.background='rgba(56,189,248,0.04)'" onmouseout="this.style.background=''">
+          <!-- Name + category -->
+          <div style="flex:0 0 160px;min-width:0">
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${s.name||''}</div>
+            <div style="font-size:11px;color:var(--muted)">${s.symbol||''}</div>
+          </div>
+
+          <!-- Daily change -->
+          <div style="flex:0 0 80px;text-align:right">
+            <div style="font-size:18px;font-weight:700;color:${(s.change_pct||0)>=0?'var(--red)':'var(--green)'}">${sign}${(s.change_pct||0).toFixed(2)}%</div>
+            <div style="font-size:10px;color:var(--muted)">当日</div>
+          </div>
+
+          <!-- Multi-period data -->
+          <div style="flex:1;display:flex;gap:3px;align-items:flex-end;height:40px;min-width:200px">
+            ${[[d5,'5日'],[d20,'20日'],[d60,'60日']].map(([v,label]) => {
+              const abs = Math.abs(v);
+              const h = Math.max(4, Math.min(abs/15*36, 36));
+              return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1">
+                <span style="font-size:11px;font-weight:600;color:${v>0?'var(--red)':'var(--green)'}">${v>0?'+':''}${v.toFixed(1)}%</span>
+                <div style="width:100%;height:${h}px;border-radius:3px;background:${v>0?'var(--red)':'var(--green)'};opacity:${0.5+abs/30}"></div>
+                <span style="font-size:9px;color:var(--muted)">${label}</span>
+              </div>`;
+            }).join('')}
+          </div>
+
+          <!-- Trend tag -->
+          <div style="flex:0 0 auto;text-align:center">
+            <span style="display:inline-block;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;color:${trendColor};background:${trendColor}12">${trendLabel}</span>
+          </div>
+
+          <!-- Price -->
+          <div style="flex:0 0 80px;text-align:right">
+            <div style="font-size:13px;color:var(--text)">${market==='cn'?'¥':'\$'}${(s.close||0).toFixed(2)}</div>
+          </div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+
+    el.innerHTML = html;
   } catch(e) {
     el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">加载失败: ' + e.message + '</p>';
   }
