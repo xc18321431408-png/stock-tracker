@@ -773,7 +773,7 @@ async function openSectorDetail(name) {
         '<td style="font-size:11px;color:var(--muted);max-width:160px">' + (s.desc || '') + '</td>' +
         '<td>' + currency + s.close.toFixed(2) + '</td>' +
         '<td class="' + cls + '" style="font-weight:700">' + sign + s.change_pct.toFixed(2) + '%</td>' +
-        '<td><button onclick="showChart(\'' + s.symbol + '\',\'' + i + '\')" style="background:var(--accent);border:none;color:#fff;padding:4px 10px;border-radius:4px;cursor:pointer;font-size:11px">📈 查看</button></td>' +
+        '<td style="display:flex;gap:4px"><button onclick="showChart(\'' + s.symbol + '\',\'' + i + '\')" style="background:var(--accent);border:none;color:#fff;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap">📈 K线</button><button onclick="showTA(\'' + s.symbol + '\')" style="background:var(--card);border:1px solid var(--border);color:var(--accent);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap">📊 技术</button></td>' +
       '</tr>';
     }
     html += '</tbody></table>';
@@ -978,6 +978,128 @@ function renderEChartsCandlestick(symbol, ohlc) {
     '斐波那契50%: ' + currency + fib[0.5].toFixed(2) + ' | ' +
     '关键支撑/阻力: ' + srTxt + ' | ' +
     '<span style="font-size:10px;color:var(--muted)">仅供参考</span>';
+}
+
+async function showTA(symbol) {
+  const container = document.getElementById('chartContainer');
+  container.style.height = 'auto';
+  container.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">加载' + symbol + '技术指标...</div></div>';
+
+  try {
+    const resp = await fetch(apiBase('/stock/') + symbol + '/technicals');
+    const d = await resp.json();
+    if (d.error) { container.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">❌ ' + d.error + '</p>'; return; }
+
+    const dates = d.dates, closes = d.closes;
+    let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">';
+
+    // ── Main Chart: Candlestick + BB + MA ──
+    html += '<div style="background:var(--bg);border-radius:8px;padding:8px"><h4 style="font-size:12px;color:var(--text);margin:0 0 4px 0">📊 ' + symbol + ' K线 · 布林带 · 均线</h4><div id="ta-main" style="height:360px"></div></div>';
+
+    // ── RSI ──
+    html += '<div style="background:var(--bg);border-radius:8px;padding:8px"><h4 style="font-size:12px;color:var(--text);margin:0 0 4px 0">📉 RSI(14)</h4><div id="ta-rsi" style="height:180px"></div></div>';
+
+    // ── MACD ──
+    html += '<div style="background:var(--bg);border-radius:8px;padding:8px"><h4 style="font-size:12px;color:var(--text);margin:0 0 4px 0">📈 MACD(12,26,9)</h4><div id="ta-macd" style="height:180px"></div></div>';
+
+    // ── Daily Returns Distribution ──
+    html += '<div style="background:var(--bg);border-radius:8px;padding:8px"><h4 style="font-size:12px;color:var(--text);margin:0 0 4px 0">📊 日收益率分布</h4><div id="ta-dist" style="height:180px"></div></div>';
+
+    html += '</div>';
+
+    // Summary stats row
+    const lastClose = closes[closes.length-1], n = closes.length;
+    const rets = d.daily_returns.filter(r => r != null);
+    const avgRet = rets.reduce((a,b)=>a+b,0)/rets.length;
+    const vol = Math.sqrt(rets.reduce((a,b)=>a+Math.pow(b-avgRet,2),0)/rets.length) * Math.sqrt(252);
+    const wins = rets.filter(r=>r>0).length, winRate = (wins/rets.length*100);
+    const lastRSI = d.rsi.filter(r=>r!=null).pop() || 0;
+    const lastMACD = d.macd_hist[d.macd_hist.length-1] || 0;
+    const bbPos = lastClose - (d.bb_mid.filter(b=>b!=null).pop()||lastClose);
+
+    html += '<div style="display:flex;gap:10px;margin-top:8px;flex-wrap:wrap;font-size:11px">' +
+      '<span style="background:var(--card);padding:4px 10px;border-radius:6px">📊 收盘: <b style="color:var(--accent)">$' + lastClose.toFixed(2) + '</b></span>' +
+      '<span style="background:var(--card);padding:4px 10px;border-radius:6px">📈 年化波动: <b>' + vol.toFixed(1) + '%</b></span>' +
+      '<span style="background:var(--card);padding:4px 10px;border-radius:6px">✅ 胜率: <b>' + winRate.toFixed(1) + '%</b></span>' +
+      '<span style="background:var(--card);padding:4px 10px;border-radius:6px">📉 RSI(14): <b style="color:'+(lastRSI>70?'var(--red)':lastRSI<30?'var(--green)':'var(--accent)')+'">' + lastRSI.toFixed(1) + '</b></span>' +
+      '<span style="background:var(--card);padding:4px 10px;border-radius:6px">📊 MACD: <b style="color:'+(lastMACD>0?'var(--red)':'var(--green)')+'">' + (lastMACD>0?'+':'') + lastMACD.toFixed(4) + '</b></span>' +
+      '<span style="background:var(--card);padding:4px 10px;border-radius:6px">📏 BB位置: <b>' + (bbPos>=0?'高于中线':'低于中线') + '</b></span>' +
+      '</div>';
+
+    container.innerHTML = html;
+
+    // ── Render ECharts ──
+    const ohlcData = [];
+    for (let i = 0; i < n; i++) {
+      ohlcData.push([d.opens[i], d.closes[i], d.lows[i], d.highs[i]]);
+    }
+
+    // Main chart
+    const mainEl = document.getElementById('ta-main');
+    const mainChart = echarts.init(mainEl, 'dark');
+    mainChart.setOption({
+      tooltip: { trigger: 'axis' },
+      legend: { data: ['K线','BB上轨','BB中轨','BB下轨','MA20','MA50'], bottom: 0, textStyle: { color: '#94a3b8', fontSize: 9 }, itemWidth: 12, itemHeight: 7 },
+      grid: { left: '6%', right: '3%', top: '5%', bottom: '12%' },
+      xAxis: { type: 'category', data: dates, axisLabel: { color: '#94a3b8', fontSize: 8, formatter: v=>v.slice(5) } },
+      yAxis: { type: 'value', scale: true, axisLabel: { color: '#94a3b8', fontSize: 10 } },
+      series: [
+        { name: 'K线', type: 'candlestick', data: ohlcData, itemStyle: { color: '#ef4444', color0: '#22c55e' } },
+        { name: 'BB上轨', type: 'line', data: d.bb_upper, lineStyle: { width: 1, color: 'rgba(245,158,11,0.5)' }, symbol: 'none' },
+        { name: 'BB中轨', type: 'line', data: d.bb_mid, lineStyle: { width: 1.5, color: '#f59e0b' }, symbol: 'none' },
+        { name: 'BB下轨', type: 'line', data: d.bb_lower, lineStyle: { width: 1, color: 'rgba(245,158,11,0.5)' }, symbol: 'none' },
+        { name: 'MA20', type: 'line', data: d.ma20, lineStyle: { width: 1.5, color: '#3b82f6' }, symbol: 'none' },
+        { name: 'MA50', type: 'line', data: d.ma50, lineStyle: { width: 1.5, color: '#f59e0b' }, symbol: 'none' },
+      ]
+    });
+
+    // RSI chart
+    const rsiEl = document.getElementById('ta-rsi');
+    const rsiChart = echarts.init(rsiEl, 'dark');
+    rsiChart.setOption({
+      tooltip: { trigger: 'axis' },
+      grid: { left: '6%', right: '3%', top: '8%', bottom: '8%' },
+      xAxis: { type: 'category', data: dates, axisLabel: { show: false } },
+      yAxis: { type: 'value', min: 0, max: 100, axisLabel: { color: '#94a3b8', fontSize: 10 } },
+      series: [
+        { name: 'RSI', type: 'line', data: d.rsi, smooth: true, lineStyle: { width: 2, color: '#a78bfa' }, symbol: 'none',
+          markLine: { silent: true, symbol: 'none', lineStyle: { type: 'dashed', color: '#666' },
+            data: [{ yAxis: 70, label: { color: '#ef4444' } }, { yAxis: 30, label: { color: '#22c55e' } }] },
+          areaStyle: { color: 'rgba(167,139,250,0.1)' } },
+      ]
+    });
+
+    // MACD chart
+    const macdEl = document.getElementById('ta-macd');
+    const macdChart = echarts.init(macdEl, 'dark');
+    macdChart.setOption({
+      tooltip: { trigger: 'axis' },
+      grid: { left: '6%', right: '3%', top: '8%', bottom: '8%' },
+      xAxis: { type: 'category', data: dates, axisLabel: { color: '#94a3b8', fontSize: 8, formatter: v=>v.slice(5) } },
+      yAxis: { type: 'value', axisLabel: { color: '#94a3b8', fontSize: 10 } },
+      series: [
+        { name: 'MACD', type: 'line', data: d.macd_line, lineStyle: { width: 2, color: '#3b82f6' }, symbol: 'none' },
+        { name: 'Signal', type: 'line', data: d.signal_line, lineStyle: { width: 1.5, color: '#f59e0b' }, symbol: 'none' },
+        { name: 'Histogram', type: 'bar', data: d.macd_hist.map((v,i) => [i, v]),
+          itemStyle: { color: p => p.data[1]>=0?'rgba(239,68,68,0.6)':'rgba(34,197,94,0.6)' } },
+      ]
+    });
+
+    // Returns Distribution
+    const distEl = document.getElementById('ta-dist');
+    const distChart = echarts.init(distEl, 'dark');
+    distChart.setOption({
+      tooltip: { trigger: 'axis' },
+      grid: { left: '8%', right: '3%', top: '8%', bottom: '8%' },
+      xAxis: { type: 'category', data: d.dist_bins.map(b => b.toFixed(2)), axisLabel: { color: '#94a3b8', fontSize: 8, rotate: 30 } },
+      yAxis: { type: 'value', axisLabel: { color: '#94a3b8', fontSize: 10 } },
+      series: [{ name: '频次', type: 'bar', data: d.dist_counts,
+        itemStyle: { color: p => { const idx=p.dataIndex; const mid=d.dist_bins.length/2; return idx<mid?'rgba(34,197,94,0.6)':'rgba(239,68,68,0.6)'; } } }]
+    });
+
+  } catch(e) {
+    container.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">❌ 加载失败: ' + e.message + '</p>';
+  }
 }
 
 function closeModal() {

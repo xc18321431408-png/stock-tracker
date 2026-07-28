@@ -2161,6 +2161,110 @@ def api_stock_history(symbol):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/stock/<symbol>/technicals')
+def api_stock_technicals(symbol):
+    """Return comprehensive technical indicators for a stock."""
+    try:
+        # Fetch 1 year of daily data
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y"
+        resp = requests.get(url, headers=YF_HEADERS, timeout=15)
+        if resp.status_code != 200:
+            return jsonify({"error": "fetch failed"}), 500
+        data = resp.json()
+        r = data.get('chart', {}).get('result', [None])[0]
+        if not r: return jsonify({"error": "no data"}), 500
+
+        timestamps = r.get('timestamp', [])
+        quotes = r.get('indicators', {}).get('quote', [{}])[0]
+        closes = [c for c in quotes.get('close', []) if c is not None]
+        opens = [o for o in quotes.get('open', []) if o is not None]
+        highs = [h for h in quotes.get('high', []) if h is not None]
+        lows = [l for l in quotes.get('low', []) if l is not None]
+        vols = quotes.get('volume', [])
+
+        if len(closes) < 60: return jsonify({"error": f"need 60+ days, got {len(closes)}"}), 500
+
+        n = len(closes)
+        dates = [datetime.fromtimestamp(ts).strftime('%Y-%m-%d') for ts in timestamps[:n]]
+
+        # ─── Bollinger Bands (20, 2) ───
+        bb_upper, bb_mid, bb_lower = [], [], []
+        for i in range(n):
+            if i < 19:
+                bb_upper.append(None); bb_mid.append(None); bb_lower.append(None)
+            else:
+                w = closes[i-19:i+1]
+                ma = sum(w)/20
+                std = (sum((x-ma)**2 for x in w)/20)**0.5
+                bb_upper.append(round(ma + 2*std, 4))
+                bb_mid.append(round(ma, 4))
+                bb_lower.append(round(ma - 2*std, 4))
+
+        # ─── MA 20 & MA 50 ───
+        ma20 = [round(sum(closes[max(0,i-19):i+1])/min(i+1,20), 4) for i in range(n)]
+        ma50 = [round(sum(closes[max(0,i-49):i+1])/min(i+1,50), 4) if i>=49 else None for i in range(n)]
+
+        # ─── Daily Returns ───
+        daily_rets = [(closes[i]-closes[i-1])/closes[i-1]*100 if i>0 and closes[i-1]>0 else None for i in range(n)]
+
+        # ─── RSI (14) ───
+        rsi = [None]*n
+        gains, losses = [], []
+        for i in range(1, n):
+            d = closes[i] - closes[i-1]
+            gains.append(max(d,0)); losses.append(max(-d,0))
+        for i in range(14, n):
+            avg_g = sum(gains[i-14:i])/14
+            avg_l = sum(losses[i-14:i])/14
+            rs = avg_g/avg_l if avg_l>0 else 100
+            rsi[i] = round(100-100/(1+rs), 2)
+
+        # ─── MACD (12, 26, 9) ───
+        def ema(data, period):
+            k = 2/(period+1)
+            result = [data[0]]
+            for i in range(1,len(data)):
+                result.append(data[i]*k + result[-1]*(1-k))
+            return result
+        ema12 = ema(closes, 12)
+        ema26 = ema(closes, 26)
+        macd_line = [ema12[i]-ema26[i] for i in range(n)]
+        signal_line = ema(macd_line, 9)
+        macd_hist = [macd_line[i]-signal_line[i] for i in range(n)]
+
+        # ─── Returns Distribution ───
+        rets = [r for r in daily_rets if r is not None]
+        min_r, max_r = min(rets), max(rets)
+        bin_count = 30
+        bin_width = (max_r-min_r)/bin_count
+        bins = [min_r + i*bin_width for i in range(bin_count+1)]
+        hist = [0]*bin_count
+        for r in rets:
+            idx = min(int((r-min_r)//bin_width), bin_count-1)
+            hist[idx] += 1
+
+        return jsonify({
+            "symbol": symbol,
+            "dates": dates,
+            "closes": [round(c,4) for c in closes],
+            "opens": [round(o,4) for o in opens],
+            "highs": [round(h,4) for h in highs],
+            "lows": [round(l,4) for l in lows],
+            "volumes": vols,
+            "bb_upper": bb_upper, "bb_mid": bb_mid, "bb_lower": bb_lower,
+            "ma20": ma20, "ma50": ma50,
+            "daily_returns": [round(r,4) if r else None for r in daily_rets],
+            "rsi": rsi,
+            "macd_line": [round(m,6) for m in macd_line],
+            "signal_line": [round(s,6) for s in signal_line],
+            "macd_hist": [round(h,6) for h in macd_hist],
+            "dist_bins": [round(b,4) for b in bins[:-1]],
+            "dist_counts": hist,
+            "dist_min": round(min_r,4), "dist_max": round(max_r,4),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/history')
 def api_history():
     days = min(request.args.get('days', 7, type=int), 90)
