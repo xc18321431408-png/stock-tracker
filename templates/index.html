@@ -62,11 +62,13 @@ body{font-family:-apple-system,'Microsoft YaHei','PingFang SC','Noto Sans SC',sa
 .cat-title:hover{background:#1c2740}
 
 /* Sector grid */
-.sector-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-bottom:12px}
-.sector-item{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:all .2s;display:flex;justify-content:space-between;align-items:center;box-shadow:var(--card-shadow)}
+.sector-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:12px}
+.sector-item{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;cursor:pointer;transition:all .2s;display:flex;justify-content:space-between;align-items:center;gap:12px;box-shadow:var(--card-shadow);overflow:hidden}
 .sector-item:hover{border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--hover-shadow)}
-.sector-item .sym{font-size:12px;color:var(--muted)}
-.sector-item .chg{font-weight:700;font-size:15px}
+.sector-item .sym{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sector-item .chg{font-weight:700;font-size:16px}
+.sector-item .sector-name{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap}
+.sector-item .trend-mini{display:flex;gap:2px;align-items:flex-end;height:12px;flex-shrink:0}
 .chg.up{color:var(--red)} .chg.down{color:var(--green)}
 
 /* Modal */
@@ -707,25 +709,23 @@ function renderCategories(sectors) {
       const star = watchlist.includes(s.symbol) ? '⭐' : '☆';
       const inCompare = compareList.findIndex(c => c.symbol === s.symbol) >= 0;
       const trend = getTrendTag(s);
+      const bars = trend.d20 !== undefined ? `<span class="trend-mini" style="margin-left:6px">${[trend.d5,trend.d20,trend.d60].map((v,i) => {
+        const w = Math.max(2, Math.min(Math.abs(v)/12*30, 30));
+        return `<span style="width:${w}px;height:${7+i*2}px;border-radius:2px;background:${v>0?'var(--red)':'var(--green)'};opacity:${0.5+Math.abs(v)/25}" title="${['5日','20日','60日'][i]}: ${v>0?'+':''}${(v||0).toFixed(1)}%"></span>`;
+      }).join('')}</span>` : '';
       html += `<div class="sector-item" onclick="openSectorDetail('${s.name}')">
-        <div>
-          <div style="display:flex;align-items:center;gap:4px">
-            <span onclick="event.stopPropagation();toggleWatch('${s.symbol}')" style="cursor:pointer;font-size:12px" title="关注/取消">${star}</span>
-            <strong>${s.name}</strong>
-            ${trend.label ? `<span style="font-size:11px;color:${trend.color};background:${trend.color}15;padding:1px 6px;border-radius:4px;white-space:nowrap">${trend.icon} ${trend.label}</span>` : ''}
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:nowrap">
+            <span onclick="event.stopPropagation();toggleWatch('${s.symbol}')" style="cursor:pointer;font-size:13px;flex-shrink:0" title="关注/取消">${star}</span>
+            <span class="sector-name" style="flex-shrink:0">${s.name}</span>
+            ${trend.label ? `<span style="font-size:10px;color:${trend.color};background:${trend.color}15;padding:2px 6px;border-radius:4px;white-space:nowrap;flex-shrink:0">${trend.icon}</span>` : ''}
+            ${bars}
           </div>
-          <span class="sym">${s.symbol} | ${market==='cn'?'¥':'\$'}${s.close.toFixed(2)}</span>
-          ${trend.d20 !== undefined ? `<div style="display:flex;gap:3px;margin-top:4px;align-items:flex-end;height:14px">
-            ${[trend.d5,trend.d20,trend.d60].map((v,i) => {
-              const w = Math.min(Math.abs(v)/15*40, 40);
-              return `<div style="width:${Math.max(w,2)}px;height:${8+i*3}px;border-radius:2px;background:${v>0?'var(--red)':'var(--green)'};opacity:${0.4+Math.abs(v)/30}" title="${['5日','20日','60日'][i]}: ${v>0?'+':''}${(v||0).toFixed(1)}%"></div>`;
-            }).join('')}
-            <span style="font-size:9px;color:var(--muted);margin-left:2px">5d/20d/60d</span>
-          </div>` : ''}
+          <div class="sym">${s.symbol} · ${market==='cn'?'¥':'\$'}${s.close.toFixed(2)}</div>
         </div>
-        <div style="text-align:right">
+        <div style="text-align:right;flex-shrink:0">
           <div class="chg ${cls}">${sign}${s.change_pct.toFixed(2)}%</div>
-          <div onclick="event.stopPropagation();toggleCompare('${s.symbol}','${s.name}')" style="font-size:10px;color:${inCompare?'var(--accent)':'var(--muted)'};cursor:pointer;margin-top:2px">${inCompare?'✓ 已加入对比':'+ 对比'}</div>
+          <div onclick="event.stopPropagation();toggleCompare('${s.symbol}','${s.name}')" style="font-size:10px;color:${inCompare?'var(--accent)':'var(--muted)'};cursor:pointer;margin-top:4px">${inCompare?'✓ 对比':'+ 对比'}</div>
         </div>
       </div>`;
     }
@@ -1517,42 +1517,19 @@ async function renderTrendsPage() {
         else if (d20 <= 0 && d60 > 0) { trendLabel = '📉 中期回调'; trendColor = '#f59e0b'; }
         else { trendLabel = '❄️ 持续走弱'; trendColor = 'var(--green)'; }
 
-        html += `<div style="display:flex;align-items:center;gap:16px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.03);transition:background .15s"
+        html += `<div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.03);white-space:nowrap"
             onmouseover="this.style.background='rgba(56,189,248,0.04)'" onmouseout="this.style.background=''">
-          <!-- Name + category -->
-          <div style="flex:0 0 160px;min-width:0">
-            <div style="font-size:14px;font-weight:600;color:var(--text)">${s.name||''}</div>
-            <div style="font-size:11px;color:var(--muted)">${s.symbol||''}</div>
-          </div>
-
-          <!-- Daily change -->
-          <div style="flex:0 0 80px;text-align:right">
-            <div style="font-size:18px;font-weight:700;color:${(s.change_pct||0)>=0?'var(--red)':'var(--green)'}">${sign}${(s.change_pct||0).toFixed(2)}%</div>
-            <div style="font-size:10px;color:var(--muted)">当日</div>
-          </div>
-
-          <!-- Multi-period data -->
-          <div style="flex:1;display:flex;gap:3px;align-items:flex-end;height:40px;min-width:200px">
+          <span style="flex:0 0 140px;font-size:14px;font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis">${s.name||''}</span>
+          <span style="flex:0 0 80px;text-align:right;font-size:16px;font-weight:700;color:${(s.change_pct||0)>=0?'var(--red)':'var(--green)'}">${sign}${(s.change_pct||0).toFixed(2)}%</span>
+          <span style="flex:1;display:flex;gap:2px;align-items:flex-end;height:32px;min-width:120px">
             ${[[d5,'5日'],[d20,'20日'],[d60,'60日']].map(([v,label]) => {
               const abs = Math.abs(v);
-              const h = Math.max(4, Math.min(abs/15*36, 36));
-              return `<div style="display:flex;flex-direction:column;align-items:center;gap:3px;flex:1">
-                <span style="font-size:11px;font-weight:600;color:${v>0?'var(--red)':'var(--green)'}">${v>0?'+':''}${v.toFixed(1)}%</span>
-                <div style="width:100%;height:${h}px;border-radius:3px;background:${v>0?'var(--red)':'var(--green)'};opacity:${0.5+abs/30}"></div>
-                <span style="font-size:9px;color:var(--muted)">${label}</span>
-              </div>`;
+              const h = Math.max(3, Math.min(abs/15*30, 30));
+              return '<span style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1"><span style="font-size:10px;font-weight:600;color:'+(v>0?'var(--red)':'var(--green)')+'">'+(v>0?'+':'')+v.toFixed(1)+'%</span><span style="width:80%;height:'+h+'px;border-radius:3px;background:'+(v>0?'var(--red)':'var(--green)')+';opacity:'+(0.5+abs/30)+'"></span></span>';
             }).join('')}
-          </div>
-
-          <!-- Trend tag -->
-          <div style="flex:0 0 auto;text-align:center">
-            <span style="display:inline-block;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;color:${trendColor};background:${trendColor}12">${trendLabel}</span>
-          </div>
-
-          <!-- Price -->
-          <div style="flex:0 0 80px;text-align:right">
-            <div style="font-size:13px;color:var(--text)">${market==='cn'?'¥':'\$'}${(s.close||0).toFixed(2)}</div>
-          </div>
+          </span>
+          <span style="flex:0 0 auto;font-size:11px;font-weight:600;color:${trendColor};background:${trendColor}12;padding:3px 10px;border-radius:6px">${trendLabel}</span>
+          <span style="flex:0 0 70px;text-align:right;font-size:12px;color:var(--muted)">${market==='cn'?'¥':'\$'}${(s.close||0).toFixed(2)}</span>
         </div>`;
       }
       html += '</div>';
