@@ -1634,7 +1634,7 @@ def fetch_stock_quotes(stock_list):
         if sym in fetched: continue
         name, desc = item[1] if len(item)>1 else sym, item[2] if len(item)>2 else ""
         try:
-            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
             resp = requests.get(url, headers=YF_HEADERS, timeout=10)
             if resp.status_code != 200: continue
             data = resp.json()
@@ -1730,7 +1730,7 @@ def fetch_cn_stock_quotes(stock_list):
     for item in stock_list:
         sym, name, desc = item[0], item[1] if len(item)>1 else sym, item[2] if len(item)>2 else ""
         try:
-            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
             resp = requests.get(url, headers=YF_HEADERS, timeout=10)
             if resp.status_code != 200: continue
             data = resp.json()
