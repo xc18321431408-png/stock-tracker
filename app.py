@@ -1629,9 +1629,13 @@ def fetch_stock_quotes(stock_list):
     for item in stock_list:
         sym, name, desc = item[0], item[1] if len(item)>1 else sym, item[2] if len(item)>2 else ""
         try:
-            # Use query2 + cache-bust to avoid stale CDN data
-            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d&_={int(time.time())}"
+            # Use 1mo range + cache-bust to get freshest data
+            ts = int(time.time())
+            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=1mo&_={ts}"
             resp = requests.get(url, headers=YF_HEADERS, timeout=10)
+            if resp.status_code != 200:
+                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=1mo&_={ts}"
+                resp = requests.get(url, headers=YF_HEADERS, timeout=10)
             if resp.status_code != 200: continue
             data = resp.json()
             r = data.get('chart', {}).get('result', [None])[0]
@@ -1639,6 +1643,7 @@ def fetch_stock_quotes(stock_list):
             closes = r.get('indicators', {}).get('quote', [{}])[0].get('close', [])
             valid = [c for c in closes if c is not None]
             if len(valid) < 2: continue
+            # Get latest 2 closes for change calculation
             close, prev_close = valid[-1], valid[-2]
             change_pct = ((close - prev_close) / prev_close) * 100 if prev_close else 0
             results.append({
