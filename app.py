@@ -1661,33 +1661,31 @@ def fetch_stock_quotes(stock_list):
     except Exception as e:
         app.logger.warning(f"v7 batch failed: {e}")
 
-    # Fallback: v8 chart API using explicit Unix timestamps to bypass CDN
-    # Request last 7 calendar days to get the latest 2 trading days
+    # Fallback: scrape Yahoo Finance webpage for price (bypasses API CDN entirely)
     fetched = {r['symbol'] for r in results}
-    end_ts = int(time.time())
-    start_ts = end_ts - 7 * 86400  # 7 days ago
     for item in stock_list:
         sym = item[0]
         if sym in fetched: continue
         name, desc = item[1] if len(item)>1 else sym, item[2] if len(item)>2 else ""
         try:
-            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{sym}?period1={start_ts}&period2={end_ts}&interval=1d"
+            url = f"https://finance.yahoo.com/quote/{sym}/"
             resp = requests.get(url, headers=YF_HEADERS, timeout=10)
             if resp.status_code != 200: continue
-            data = resp.json()
-            r = data.get('chart', {}).get('result', [None])[0]
-            if not r: continue
-            closes = r.get('indicators', {}).get('quote', [{}])[0].get('close', [])
-            valid = [c for c in closes if c is not None]
-            if len(valid) < 2: continue
-            close, prev_close = valid[-1], valid[-2]
-            change_pct = ((close - prev_close) / prev_close) * 100 if prev_close else 0
-            results.append({
-                'symbol': sym, 'name': name, 'desc': desc,
-                'close': round(close, 2), 'change_pct': round(change_pct, 2),
-                'volume': 0,
-            })
-            time.sleep(0.15)
+            html = resp.text
+            # Extract price from JSON data embedded in page
+            import re as _re
+            # Look for the price in the page's JSON data
+            match = _re.search(r'"regularMarketPrice":\s*\{[^}]*"raw":\s*([\d.]+)', html)
+            chg_match = _re.search(r'"regularMarketChangePercent":\s*\{[^}]*"raw":\s*([\d.-]+)', html)
+            if match:
+                close = float(match.group(1))
+                change_pct = float(chg_match.group(1)) if chg_match else 0
+                results.append({
+                    'symbol': sym, 'name': name, 'desc': desc,
+                    'close': round(close, 2), 'change_pct': round(change_pct, 2),
+                    'volume': 0,
+                })
+            time.sleep(0.3)
         except: pass
 
     return sorted(results, key=lambda x: x['change_pct'], reverse=True)
