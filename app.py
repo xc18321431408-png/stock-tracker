@@ -1624,18 +1624,52 @@ def fetch_sector_data(target_date=None):
     return results
 
 def fetch_stock_quotes(stock_list):
-    """Fetch real-time quotes for a list of (symbol, name, desc) tuples via Yahoo Finance."""
+    """Fetch real-time quotes via Yahoo v7 quote API (bypasses CDN cache issues)."""
+    # Batch fetch: Yahoo v7 supports comma-separated symbols
+    symbols_str = ','.join([s[0] for s in stock_list])
+    results = []
+    try:
+        url = f"https://query1.finance.yahoo.com/v7/finance/quote?symbols={symbols_str}&fields=regularMarketPrice,regularMarketChangePercent,shortName,longName"
+        resp = requests.get(url, headers=YF_HEADERS, timeout=10)
+        if resp.status_code != 200:
+            # Fallback: try query2
+            url = url.replace('query1', 'query2')
+            resp = requests.get(url, headers=YF_HEADERS, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            quote_resp = data.get('quoteResponse', {})
+            quotes = quote_resp.get('result', [])
+            quote_map = {}
+            for q in quotes:
+                quote_map[q.get('symbol','')] = q
+            for item in stock_list:
+                sym, name, desc = item[0], item[1] if len(item)>1 else sym, item[2] if len(item)>2 else ""
+                q = quote_map.get(sym, {})
+                price = q.get('regularMarketPrice', 0)
+                chg_pct = q.get('regularMarketChangePercent', 0)
+                if price and price > 0:
+                    results.append({
+                        'symbol': sym, 'name': name, 'desc': desc,
+                        'close': round(price, 2),
+                        'change_pct': round(chg_pct, 2),
+                        'volume': 0,
+                    })
+        if not results:
+            # Fallback to v8 chart API
+            return _fetch_stock_quotes_v8(stock_list)
+    except Exception as e:
+        app.logger.warning(f"Stock quotes batch failed: {e}, trying v8")
+        return _fetch_stock_quotes_v8(stock_list)
+    return sorted(results, key=lambda x: x['change_pct'], reverse=True)
+
+def _fetch_stock_quotes_v8(stock_list):
+    """Fallback: fetch quotes one by one via v8 chart API."""
     results = []
     for item in stock_list:
         sym, name, desc = item[0], item[1] if len(item)>1 else sym, item[2] if len(item)>2 else ""
         try:
-            # Use 1mo range + cache-bust to get freshest data
-            ts = int(time.time())
-            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=1mo&_={ts}"
+            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
             resp = requests.get(url, headers=YF_HEADERS, timeout=10)
-            if resp.status_code != 200:
-                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=1mo&_={ts}"
-                resp = requests.get(url, headers=YF_HEADERS, timeout=10)
             if resp.status_code != 200: continue
             data = resp.json()
             r = data.get('chart', {}).get('result', [None])[0]
@@ -1643,7 +1677,6 @@ def fetch_stock_quotes(stock_list):
             closes = r.get('indicators', {}).get('quote', [{}])[0].get('close', [])
             valid = [c for c in closes if c is not None]
             if len(valid) < 2: continue
-            # Get latest 2 closes for change calculation
             close, prev_close = valid[-1], valid[-2]
             change_pct = ((close - prev_close) / prev_close) * 100 if prev_close else 0
             results.append({
