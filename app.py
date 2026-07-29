@@ -2012,6 +2012,7 @@ def index():
 def api_latest():
     target_date = request.args.get('date', '')
     force = request.args.get('force', '0') == '1'
+    auto_refresh = not target_date
     if not target_date:
         with sqlite3.connect(DB_PATH) as conn:
             latest_date = conn.execute("SELECT MAX(date) FROM sector_data").fetchone()[0]
@@ -2592,6 +2593,7 @@ def _next_update_time(market):
 def api_cn_latest():
     target_date = request.args.get('date', '')
     force = request.args.get('force', '0') == '1'
+    auto_refresh = not target_date
     if not target_date:
         with sqlite3.connect(CN_DB_PATH) as conn:
             latest_date = conn.execute("SELECT MAX(date) FROM sector_data").fetchone()[0]
