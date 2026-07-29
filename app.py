@@ -2011,11 +2011,18 @@ def index():
 @app.route('/api/latest')
 def api_latest():
     target_date = request.args.get('date', '')
-    auto_refresh = not target_date
+    force = request.args.get('force', '0') == '1'
     if not target_date:
         with sqlite3.connect(DB_PATH) as conn:
             latest_date = conn.execute("SELECT MAX(date) FROM sector_data").fetchone()[0]
         target_date = latest_date or (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    # Force refresh: always fetch live
+    if force:
+        data = fetch_sector_data(target_date)
+        if data:
+            save_to_db(data, target_date)
+            return jsonify({"date": target_date, "sectors": data, "fetched": "live", "updated_at": datetime.now().strftime('%m-%d %H:%M'), "next_update": _next_update_time('us')})
+        return jsonify({"error": "no data", "date": target_date})
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
@@ -2584,11 +2591,17 @@ def _next_update_time(market):
 @app.route('/api/cn/latest')
 def api_cn_latest():
     target_date = request.args.get('date', '')
-    auto_refresh = not target_date
+    force = request.args.get('force', '0') == '1'
     if not target_date:
         with sqlite3.connect(CN_DB_PATH) as conn:
             latest_date = conn.execute("SELECT MAX(date) FROM sector_data").fetchone()[0]
         target_date = latest_date or (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    if force:
+        data = fetch_cn_sector_data(target_date)
+        if data:
+            save_cn_to_db(data, target_date)
+            return jsonify({"date": target_date, "sectors": data, "fetched": "live", "updated_at": datetime.now().strftime('%m-%d %H:%M'), "next_update": _next_update_time('cn')})
+        return jsonify({"error": "no data", "date": target_date})
     with sqlite3.connect(CN_DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
