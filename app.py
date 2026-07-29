@@ -1589,7 +1589,7 @@ def fetch_sector_data(target_date=None):
     results = []
     for category, symbol, name in SUB_SECTORS:
         try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
+            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
             resp = requests.get(url, headers=YF_HEADERS, timeout=15)
             if resp.status_code != 200: continue
             data = resp.json()
@@ -1629,7 +1629,8 @@ def fetch_stock_quotes(stock_list):
     for item in stock_list:
         sym, name, desc = item[0], item[1] if len(item)>1 else sym, item[2] if len(item)>2 else ""
         try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
+            # Use query2 + cache-bust to avoid stale CDN data
+            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d&_={int(time.time())}"
             resp = requests.get(url, headers=YF_HEADERS, timeout=10)
             if resp.status_code != 200: continue
             data = resp.json()
@@ -1679,7 +1680,7 @@ def fetch_cn_sector_data(target_date=None):
     for category, symbol, name in CN_SECTORS:
         try:
             # Use full symbol with suffix for Yahoo Finance CN ETFs
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
+            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
             resp = requests.get(url, headers=YF_HEADERS, timeout=12)
             if resp.status_code != 200:
                 fail_count += 1; continue
@@ -1724,7 +1725,7 @@ def fetch_cn_stock_quotes(stock_list):
     for item in stock_list:
         sym, name, desc = item[0], item[1] if len(item)>1 else sym, item[2] if len(item)>2 else ""
         try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
+            url = f"https://query2.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
             resp = requests.get(url, headers=YF_HEADERS, timeout=10)
             if resp.status_code != 200: continue
             data = resp.json()
@@ -2147,7 +2148,7 @@ def api_sector_detail(sector_name):
 def api_stock_history(symbol):
     """Return OHLC history for candlestick chart (3 months) via Yahoo Finance."""
     try:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=3mo"
+        url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=3mo"
         resp = requests.get(url, headers=YF_HEADERS, timeout=15)
         if resp.status_code != 200:
             return jsonify({"error": "fetch failed"}), 500
@@ -2183,7 +2184,7 @@ def api_stock_technicals(symbol):
     """Return comprehensive technical indicators for a stock."""
     try:
         # Fetch 1 year of daily data
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y"
+        url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y"
         resp = requests.get(url, headers=YF_HEADERS, timeout=15)
         if resp.status_code != 200:
             return jsonify({"error": "fetch failed"}), 500
@@ -2318,7 +2319,7 @@ def api_backtest():
 
     # Fetch historical data from Yahoo Finance (more reliable)
     try:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y"
+        url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y"
         resp = requests.get(url, headers=YF_HEADERS, timeout=15)
         if resp.status_code != 200:
             return jsonify({"error": "无法获取数据"}), 500
@@ -2374,7 +2375,7 @@ def api_cn_backtest():
     strategy = body.get('strategy', 'ma_cross')
     params = body.get('params', {})
     try:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y"
+        url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y"
         resp = requests.get(url, headers=YF_HEADERS, timeout=15)
         if resp.status_code != 200:
             return jsonify({"error": "无法获取数据"}), 500
@@ -2484,7 +2485,7 @@ def api_macro():
     indicators = {}
     # VIX
     try:
-        r = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=2d", timeout=10)
+        r = requests.get("https://query2.finance.yahoo.com/v8/finance/chart/%5EVIX?interval=1d&range=2d", timeout=10)
         d = r.json()
         if d['chart']['result']:
             meta = d['chart']['result'][0]['meta']
@@ -2493,7 +2494,7 @@ def api_macro():
     except: pass
     # DXY
     try:
-        r = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?interval=1d&range=2d", timeout=10)
+        r = requests.get("https://query2.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?interval=1d&range=2d", timeout=10)
         d = r.json()
         if d['chart']['result']:
             meta = d['chart']['result'][0]['meta']
@@ -2502,7 +2503,7 @@ def api_macro():
     except: pass
     # 10Y Treasury
     try:
-        r = requests.get("https://query1.finance.yahoo.com/v8/finance/chart/%5ETNX?interval=1d&range=2d", timeout=10)
+        r = requests.get("https://query2.finance.yahoo.com/v8/finance/chart/%5ETNX?interval=1d&range=2d", timeout=10)
         d = r.json()
         if d['chart']['result']:
             meta = d['chart']['result'][0]['meta']
@@ -2671,7 +2672,7 @@ def api_cn_sector_detail(sector_name):
 @app.route('/api/cn/stock/<symbol>/history')
 def api_cn_stock_history(symbol):
     try:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=3mo"
+        url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=3mo"
         resp = requests.get(url, headers=YF_HEADERS, timeout=15)
         if resp.status_code != 200:
             return jsonify({"error": "fetch failed"}), 500
