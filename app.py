@@ -1767,14 +1767,22 @@ def save_cn_to_db(data, target_date):
         conn.commit()
 
 def daily_fetch_job():
-    y = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-    data = fetch_sector_data(y)
-    if data: save_to_db(data, y)
+    """美股数据抓取 - 当日数据"""
+    today = datetime.now().strftime('%Y-%m-%d')
+    print(f"[Scheduler] US fetch for {today}")
+    data = fetch_sector_data(today)
+    if data:
+        save_to_db(data, today)
+        print(f"[Scheduler] US saved {len(data)} sectors for {today}")
 
 def cn_daily_fetch_job():
-    y = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-    data = fetch_cn_sector_data(y)
-    if data: save_cn_to_db(data, y)
+    """A股数据抓取 - 当日数据"""
+    today = datetime.now().strftime('%Y-%m-%d')
+    print(f"[Scheduler] CN fetch for {today}")
+    data = fetch_cn_sector_data(today)
+    if data:
+        save_cn_to_db(data, today)
+        print(f"[Scheduler] CN saved {len(data)} sectors for {today}")
 
 def _warmup_kol_cache():
     """Prefetch KOL tweets and fetch latest data at startup."""
@@ -1819,15 +1827,16 @@ def _refresh_kol_cache():
         print(f"[KOL] Cache refresh failed: {e}")
 
 scheduler = BackgroundScheduler(timezone='Asia/Shanghai')
-# 美股: 每天早上4点、5点更新（北京时间）
+# 美股(北京时间): 03:30收盘前半小时 + 04:00收盘后立即更新
+scheduler.add_job(daily_fetch_job, 'cron', hour=3, minute=30)
 scheduler.add_job(daily_fetch_job, 'cron', hour=4, minute=0)
-scheduler.add_job(daily_fetch_job, 'cron', hour=5, minute=0)
-# A股: 每天下午14:30、15:30更新（北京时间）
+# A股(北京时间): 14:30收盘前半小时 + 15:00收盘后立即更新
 scheduler.add_job(cn_daily_fetch_job, 'cron', hour=14, minute=30)
-scheduler.add_job(cn_daily_fetch_job, 'cron', hour=15, minute=30)
+scheduler.add_job(cn_daily_fetch_job, 'cron', hour=15, minute=0)
 # KOL tweets: refresh every 30 minutes
 scheduler.add_job(_refresh_kol_cache, 'interval', minutes=30)
 scheduler.start()
+print("[Scheduler] Started: US 03:30/04:00, CN 14:30/15:00 (Beijing time)")
 
 # Warm up KOL cache shortly after startup (in background thread)
 def _delayed_warmup():
@@ -2027,7 +2036,7 @@ def api_latest():
             latest_fetched = rows[0]['fetched_at']
             if latest_fetched:
                 fetched_dt = datetime.strptime(latest_fetched, '%Y-%m-%d %H:%M:%S')
-                if (datetime.now() - fetched_dt).total_seconds() > 6 * 3600:
+                if (datetime.now() - fetched_dt).total_seconds() > 2 * 3600:
                     data = fetch_sector_data(target_date)
                     if data:
                         save_to_db(data, target_date)
@@ -2600,7 +2609,7 @@ def api_cn_latest():
             latest_fetched = rows[0]['fetched_at']
             if latest_fetched:
                 fetched_dt = datetime.strptime(latest_fetched, '%Y-%m-%d %H:%M:%S')
-                if (datetime.now() - fetched_dt).total_seconds() > 6 * 3600:
+                if (datetime.now() - fetched_dt).total_seconds() > 2 * 3600:
                     data = fetch_cn_sector_data(target_date)
                     if data:
                         save_cn_to_db(data, target_date)
