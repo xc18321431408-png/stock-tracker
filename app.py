@@ -2222,14 +2222,16 @@ def api_stock_history(symbol):
 
 @app.route('/api/stock/<symbol>/technicals')
 def api_stock_technicals(symbol):
-    """Return comprehensive technical + quant indicators (cached 30 days)."""
-    # Check cache first
-    now = time.time()
+    """Return comprehensive technical + quant indicators (refreshes on 1st of each month)."""
+    # Check cache: refresh only when new month starts
     cached = _technicals_cache.get(symbol.upper())
-    if cached and (now - cached[0]) < 2592000:  # 30 days
-        resp = jsonify(cached[1])
-        resp.headers['X-Cache'] = 'HIT'
-        return resp
+    if cached:
+        cached_month = datetime.fromtimestamp(cached[0]).strftime('%Y-%m')
+        current_month = datetime.now().strftime('%Y-%m')
+        if cached_month == current_month:
+            resp = jsonify(cached[1])
+            resp.headers['X-Cache'] = 'HIT'
+            return resp
 
     try:
         # Fetch 1 year of daily data
@@ -2461,9 +2463,10 @@ def api_stock_technicals(symbol):
                 "mc_p95": mc_p95,
                 "mc_up_prob": mc_up_prob,
                 "cached_at": datetime.now().strftime('%Y-%m-%d'),
+                "next_refresh": (datetime.now().replace(day=1) + timedelta(days=32)).replace(day=1).strftime('%Y-%m-%d'),
             }
         }
-        # Cache for 30 days
+        # Cache until next month
         _technicals_cache[symbol.upper()] = (time.time(), resp_data)
         return jsonify(resp_data)
     except Exception as e:

@@ -1218,7 +1218,7 @@ async function showQuant(symbol) {
         '<h3 style="font-size:16px;color:var(--accent);margin:0 0 16px 0">🧠 ' + symbol + ' 量化深度研究报告</h3>' +
         sections.map(s => '<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.04)">' + s + '</div>').join('') +
         '<p style="margin-top:12px;font-size:10px;color:var(--muted);text-align:center">' +
-        '📅 报告生成：' + (d.cached_at || new Date().toISOString().slice(0,10)) + ' | 每30天自动刷新 | ' +
+        '📅 报告生成：' + (d.cached_at || new Date().toISOString().slice(0,10)) + ' | 每月1日自动更新 | ' +
         '⚠️ 基于近' + q.n_days + '个交易日历史数据自动生成。历史统计特征不代表未来重演。不构成投资建议。</p>' +
         '</div>';
     };
