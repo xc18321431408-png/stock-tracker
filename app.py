@@ -2359,7 +2359,7 @@ def api_stock_technicals(symbol):
         for _ in range(mc_paths):
             path = [closes[-1]]
             for __ in range(mc_days):
-                shock = mu_daily/100 + sigma_daily/100 * (sum([__import__('random').gauss(0,1) for _ in range(12)]) - 6)  # approx normal via CLT
+                shock = mu_daily/100 + sigma_daily/100 * __import__('random').gauss(0, 1)
                 path.append(path[-1] * (1 + shock))
             mc_returns.append((path[-1] - path[0]) / path[0] * 100)
         mc_returns.sort()
