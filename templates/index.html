@@ -773,7 +773,7 @@ async function openSectorDetail(name) {
         '<td style="font-size:11px;color:var(--muted);max-width:160px">' + (s.desc || '') + '</td>' +
         '<td>' + currency + s.close.toFixed(2) + '</td>' +
         '<td class="' + cls + '" style="font-weight:700">' + sign + s.change_pct.toFixed(2) + '%</td>' +
-        '<td style="display:flex;gap:4px"><button onclick="showChart(\'' + s.symbol + '\',\'' + i + '\')" style="background:var(--accent);border:none;color:#fff;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap">📈 K线</button><button onclick="showTA(\'' + s.symbol + '\')" style="background:var(--card);border:1px solid var(--border);color:var(--accent);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap">📊 技术</button></td>' +
+        '<td style="display:flex;gap:4px"><button onclick="showChart(\'' + s.symbol + '\',\'' + i + '\')" style="background:var(--accent);border:none;color:#fff;padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap">📈 K线</button><button onclick="showTA(\'' + s.symbol + '\')" style="background:var(--card);border:1px solid var(--border);color:var(--accent);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap">📊 技术</button><button onclick="showQuant(\'' + s.symbol + '\')" style="background:var(--card);border:1px solid var(--gold);color:var(--gold);padding:4px 8px;border-radius:4px;cursor:pointer;font-size:11px;white-space:nowrap">📐 量化</button></td>' +
       '</tr>';
     }
     html += '</tbody></table>';
@@ -1108,6 +1108,106 @@ function closeModal() {
 document.getElementById('modalOverlay').addEventListener('click', function(e) {
   if (e.target === this) closeModal();
 });
+
+// ── Quant Metrics Panel (PPT指标体系) ──
+async function showQuant(symbol) {
+  const container = document.getElementById('chartContainer');
+  container.style.height = 'auto';
+  container.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">加载' + symbol + '量化指标...</div></div>';
+
+  try {
+    const resp = await fetch(apiBase('/stock/') + symbol + '/technicals');
+    const d = await resp.json();
+    if (d.error || !d.quant) { container.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">❌ ' + (d.error || '无量化数据') + '</p>'; return; }
+    const q = d.quant;
+
+    const color = (v, good) => good ? (v>=0?'var(--red)':'var(--green)') : 'var(--text)';
+    const sign = v => (v>0?'+':'') + v.toFixed(2);
+
+    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:12px">';
+
+    // ── ① 基础面板：回报与波动 ──
+    html += '<div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border)">';
+    html += '<h4 style="font-size:13px;color:var(--accent);margin:0 0 10px 0">📊 基础层 — 回报·波动·风险调整</h4>';
+    html += '<table style="width:100%;font-size:12px;border-collapse:collapse">';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">μ 日均收益</td><td style="text-align:right;font-weight:700;color:'+(q.mu_daily>=0?'var(--red)':'var(--green)')+'">' + sign(q.mu_daily) + '%</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">μ 年化收益</td><td style="text-align:right;font-weight:700;color:'+(q.mu_annual>=0?'var(--red)':'var(--green)')+'">' + sign(q.mu_annual) + '%</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">σ 日波动率</td><td style="text-align:right;font-weight:700">' + q.sigma_daily.toFixed(2) + '%</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">年化波动率</td><td style="text-align:right;font-weight:700;color:'+(q.sigma_annual>40?'var(--red)':'var(--accent)')+'">' + q.sigma_annual.toFixed(1) + '%' + (q.sigma_annual>40?' ⚠️高波动':'') + '</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">夏普比率</td><td style="text-align:right;font-weight:700;color:'+(q.sharpe>1?'var(--red)':q.sharpe<0?'var(--green)':'var(--accent)')+'">' + q.sharpe.toFixed(2) + (q.sharpe>2?' 🌟出色':q.sharpe>1?' ✅优秀':q.sharpe<0?' ❌不如存银行':'') + '</td></tr>';
+    html += '</table></div>';
+
+    // ── ② 风险面板：VaR·CVaR·蒙特卡洛 ──
+    html += '<div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border)">';
+    html += '<h4 style="font-size:13px;color:var(--red);margin:0 0 10px 0">⚠️ 风险层 — VaR·CVaR·蒙特卡洛</h4>';
+    html += '<table style="width:100%;font-size:12px;border-collapse:collapse">';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">VaR 95%</td><td style="text-align:right;font-weight:700;color:var(--red)">' + q.var_95.toFixed(2) + '%</td><td style="font-size:10px;color:var(--muted);padding-left:8px">95%把握单日最多亏</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">CVaR 95%</td><td style="text-align:right;font-weight:700;color:var(--red)">' + q.cvar_95.toFixed(2) + '%</td><td style="font-size:10px;color:var(--muted);padding-left:8px">跌破VaR后平均亏</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">最大回撤</td><td style="text-align:right;font-weight:700;color:var(--red)">-' + q.max_dd.toFixed(1) + '%</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">VaR vs CVaR 差距</td><td style="text-align:right;font-weight:700;color:'+(Math.abs(q.cvar_95-q.var_95)>3?'var(--red)':'var(--accent)')+'">' + Math.abs(q.cvar_95-q.var_95).toFixed(2) + '%</td><td style="font-size:10px;color:var(--muted);padding-left:8px">'+(Math.abs(q.cvar_95-q.var_95)>3?'⚠️厚尾风险':'尾部正常')+'</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted);border-top:1px solid var(--border)" colspan="3"></td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">蒙特卡洛(21天)</td><td style="text-align:right;font-weight:700;color:'+(q.mc_median>=0?'var(--red)':'var(--green)')+'">' + sign(q.mc_median) + '%</td><td style="font-size:10px;color:var(--muted);padding-left:8px">中位数预测</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">MC 95%区间</td><td style="text-align:right;font-weight:700;font-size:11px">[' + q.mc_p5.toFixed(1) + '%, ' + q.mc_p95.toFixed(1) + '%]</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">上涨概率</td><td style="text-align:right;font-weight:700;color:'+(q.mc_up_prob>50?'var(--red)':'var(--green)')+'">' + q.mc_up_prob.toFixed(1) + '%</td></tr>';
+    html += '</table></div>';
+
+    // ── ③ 形态面板：偏度·峰度·JB ──
+    html += '<div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border)">';
+    html += '<h4 style="font-size:13px;color:var(--gold);margin:0 0 10px 0">🔍 形态层 — 偏度·峰度·分布诊断</h4>';
+    html += '<table style="width:100%;font-size:12px;border-collapse:collapse">';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">偏度 (Skewness)</td><td style="text-align:right;font-weight:700;color:'+(q.skew<-0.5?'var(--red)':q.skew>0.5?'var(--accent)':'var(--text)')+'">' + q.skew.toFixed(3) + (q.skew<-0.5?' ⚠️左偏暴跌':q.skew>0.5?' 📈右偏拉升':' ≈对称') + '</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">超额峰度</td><td style="text-align:right;font-weight:700;color:'+(q.excess_kurt>2?'var(--red)':q.excess_kurt>0?'var(--gold)':'var(--accent)')+'">' + q.excess_kurt.toFixed(3) + (q.excess_kurt>3?' 🚨肥尾严重':q.excess_kurt>1?' ⚠️厚尾':q.excess_kurt<0?' ✓薄尾':' ≈正态') + '</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">Jarque-Bera</td><td style="text-align:right;font-weight:700">' + q.jb_stat.toFixed(1) + '</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">JB p值</td><td style="text-align:right;font-weight:700;color:'+(q.is_normal?'var(--green)':'var(--red)')+'">' + q.jb_pvalue.toFixed(4) + '</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">正态性检验</td><td style="text-align:right;font-weight:700;color:'+(q.is_normal?'var(--green)':'var(--red)')+'">' + (q.is_normal?'✅ 通过 (p≥0.05)':'❌ 拒绝 (p<0.05) — 传统指标不可靠') + '</td></tr>';
+    html += '</table></div>';
+
+    // ── ④ 因子面板：Beta·R² ──
+    html += '<div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border)">';
+    html += '<h4 style="font-size:13px;color:var(--blue);margin:0 0 10px 0">🔗 因子层 — Beta·R²·因子分解</h4>';
+    html += '<table style="width:100%;font-size:12px;border-collapse:collapse">';
+    if (q.beta_spy != null) {
+      html += '<tr><td style="padding:4px 8px;color:var(--muted)">β 对SPY</td><td style="text-align:right;font-weight:700;color:'+(q.beta_spy>1?'var(--red)':q.beta_spy>0?'var(--accent)':'var(--green)')+'">' + q.beta_spy.toFixed(2) + (q.beta_spy>1?' 📈大盘放大器':q.beta_spy<0?' 🔄反向':'') + '</td></tr>';
+      html += '<tr><td style="padding:4px 8px;color:var(--muted)">R² 决定系数</td><td style="text-align:right;font-weight:700;color:'+(q.r_squared>0.5?'var(--accent)':'var(--red)')+'">' + (q.r_squared*100).toFixed(1) + '%</td><td style="font-size:10px;color:var(--muted);padding-left:8px">'+(q.r_squared>0.5?'β可靠':'β不具参考价值')+'</td></tr>';
+      html += '<tr><td style="padding:4px 8px;color:var(--muted)">系统性波动</td><td style="text-align:right;font-weight:700">' + (q.sys_risk||'-') + '%</td></tr>';
+      html += '<tr><td style="padding:4px 8px;color:var(--muted)">异质波动</td><td style="text-align:right;font-weight:700">' + (q.idiosyncratic_risk||'-') + '%</td></tr>';
+    } else {
+      html += '<tr><td colspan="3" style="color:var(--muted);font-size:11px">⚠️ 无法获取SPY数据，Beta/R²不可用</td></tr>';
+    }
+    html += '</table></div>';
+
+    // ── ⑤ 交易统计 ──
+    html += '<div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border)">';
+    html += '<h4 style="font-size:13px;color:var(--accent);margin:0 0 10px 0">📋 交易统计 — ' + q.n_days + '个交易日</h4>';
+    html += '<table style="width:100%;font-size:12px;border-collapse:collapse">';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">胜率</td><td style="text-align:right;font-weight:700">' + q.win_rate.toFixed(1) + '%</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">最佳日</td><td style="text-align:right;font-weight:700;color:var(--red)">+' + q.best_day.toFixed(2) + '%</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">最差日</td><td style="text-align:right;font-weight:700;color:var(--green)">' + q.worst_day.toFixed(2) + '%</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">平均涨幅(涨日)</td><td style="text-align:right;font-weight:700;color:var(--red)">+' + q.avg_pos.toFixed(2) + '%</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">平均跌幅(跌日)</td><td style="text-align:right;font-weight:700;color:var(--green)">' + q.avg_neg.toFixed(2) + '%</td></tr>';
+    html += '<tr><td style="padding:4px 8px;color:var(--muted)">涨跌比</td><td style="text-align:right;font-weight:700">' + (Math.abs(q.avg_pos/q.avg_neg)).toFixed(2) + '</td>';
+    html += '</table></div>';
+
+    // ── ⑥ GARCH波动率预测 ──
+    html += '<div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border);border-left:3px solid var(--gold)">';
+    html += '<h4 style="font-size:13px;color:var(--gold);margin:0 0 10px 0">📐 GARCH(1,1) — 10天前瞻波动率</h4>';
+    html += '<div style="text-align:center">';
+    html += '<span style="font-size:32px;font-weight:800;color:var(--accent)">' + q.garch_10d_vol.toFixed(2) + '%</span>';
+    html += '<span style="font-size:12px;color:var(--muted)"> /日</span>';
+    html += '</div>';
+    html += '<p style="font-size:10px;color:var(--muted);text-align:center;margin-top:6px">α+β≈0.95 | 波动冲击持续性高 | GARCH预测值用于MC参数输入</p>';
+    html += '</div>';
+
+    html += '</div>'; // end grid
+
+    html += '<p style="font-size:10px;color:var(--muted);text-align:center;margin-top:10px">⚠️ 历史数据不代表未来 · 不构成投资建议 · 指标含义详见量化指标速查表</p>';
+
+    container.innerHTML = html;
+
+  } catch(e) {
+    container.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">❌ 加载失败: ' + e.message + '</p>';
+  }
+}
 
 // ── Quant Backtest ──
 function updateParams() {

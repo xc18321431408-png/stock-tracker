@@ -2266,6 +2266,108 @@ def api_stock_technicals(symbol):
             idx = min(int((r-min_r)//bin_width), bin_count-1)
             hist[idx] += 1
 
+        # ─── Quant Metrics (PPT: 量化金融核心指标) ───
+        m = len(rets)
+        mu_daily = sum(rets)/m  # 日均收益率 (%)
+        mu_annual = mu_daily * 252  # 年化收益 (%)
+        sigma_daily = (sum((r-mu_daily)**2 for r in rets)/m) ** 0.5  # 日波动率 (%)
+        sigma_annual = sigma_daily * (252**0.5)  # 年化波动率 (%)
+        rf_daily = 0.04 / 252  # 假设无风险利率 4%
+        sharpe = (mu_annual - 4.0) / sigma_annual if sigma_annual > 0 else 0
+
+        # VaR & CVaR (Historical method, 95%)
+        sorted_rets = sorted(rets)
+        var_idx = int(m * 0.05)
+        var_95 = sorted_rets[var_idx] if var_idx < m else sorted_rets[-1]
+        cvar_95 = sum(sorted_rets[:var_idx]) / var_idx if var_idx > 0 else var_95
+
+        # Skewness & Kurtosis
+        skew = (sum((r-mu_daily)**3 for r in rets)/m) / (sigma_daily**3) if sigma_daily > 0 else 0
+        kurt = (sum((r-mu_daily)**4 for r in rets)/m) / (sigma_daily**4) if sigma_daily > 0 else 0
+        excess_kurt = kurt - 3
+
+        # Jarque-Bera test
+        jb_stat = m/6 * (skew**2 + (excess_kurt**2)/4)
+        # p-value approximation for JB (chi-square with 2 df)
+        jb_pvalue = 1.0 if jb_stat < 0.1 else math.exp(-jb_stat/2) * (1 + jb_stat/2) if jb_stat < 10 else 0.0
+        is_normal = jb_pvalue > 0.05
+
+        # Max Drawdown
+        peak = closes[0]
+        max_dd = 0.0
+        for c in closes:
+            if c > peak: peak = c
+            dd = (peak - c) / peak * 100 if peak > 0 else 0
+            if dd > max_dd: max_dd = dd
+
+        # Win Rate (% of positive days)
+        win_days = sum(1 for r in rets if r > 0)
+        win_rate = win_days / m * 100 if m > 0 else 0
+
+        # Best/Worst day
+        best_day = max(rets)
+        worst_day = min(rets)
+
+        # Positive/Negative day count and avg
+        pos_rets = [r for r in rets if r > 0]
+        neg_rets = [r for r in rets if r < 0]
+        avg_pos = sum(pos_rets)/len(pos_rets) if pos_rets else 0
+        avg_neg = sum(neg_rets)/len(neg_rets) if neg_rets else 0
+
+        # ─── Factor Decomposition: Beta & R² against SPY ───
+        try:
+            spy_url = f"https://query2.finance.yahoo.com/v8/finance/chart/SPY?interval=1d&range=1y"
+            spy_resp = requests.get(spy_url, headers=YF_HEADERS, timeout=10)
+            spy_closes = []
+            if spy_resp.status_code == 200:
+                spy_data = spy_resp.json()
+                spy_r = spy_data.get('chart',{}).get('result',[None])[0]
+                if spy_r:
+                    spy_closes = [c for c in spy_r.get('indicators',{}).get('quote',[{}])[0].get('close',[]) if c is not None]
+            # Align lengths
+            min_len = min(len(rets), len(spy_closes)-1)
+            spy_rets = [(spy_closes[i+1]-spy_closes[i])/spy_closes[i]*100 for i in range(min_len) if spy_closes[i]>0]
+            stock_rets_for_beta = rets[-len(spy_rets):] if len(spy_rets) < len(rets) else rets[:len(spy_rets)]
+            if len(spy_rets) >= 60 and len(stock_rets_for_beta) >= 60:
+                mn = min(len(spy_rets), len(stock_rets_for_beta))
+                x = spy_rets[:mn]; y = stock_rets_for_beta[:mn]
+                x_mean = sum(x)/mn; y_mean = sum(y)/mn
+                cov_xy = sum((x[i]-x_mean)*(y[i]-y_mean) for i in range(mn)) / mn
+                var_x = sum((xi-x_mean)**2 for xi in x) / mn
+                beta_spy = round(cov_xy/var_x, 3) if var_x > 0 else None
+                r_squared = round((cov_xy/(var_x**0.5)/((sum((yi-y_mean)**2 for yi in y)/mn)**0.5))**2, 4) if var_x>0 and (sum((yi-y_mean)**2 for yi in y)/mn)>0 else None
+                # Systematic vs idiosyncratic risk
+                sys_risk = round((beta_spy**2 * var_x / (sum((yi-y_mean)**2 for yi in y)/mn) * 100), 1) if beta_spy and r_squared else None
+                idiosyncratic_risk = round((1 - r_squared) * 100, 1) if r_squared else None
+            else:
+                beta_spy = None; r_squared = None; sys_risk = None; idiosyncratic_risk = None
+        except:
+            beta_spy = None; r_squared = None; sys_risk = None; idiosyncratic_risk = None
+
+        # ─── GARCH(1,1) 10-day forward vol forecast ───
+        garch_omega = 0.01; garch_alpha = 0.1; garch_beta = 0.85
+        garch_vol = sigma_daily  # start with sample vol
+        garch_forecast = []
+        for _ in range(10):
+            garch_vol = (garch_omega + garch_alpha * (sigma_daily**2) + garch_beta * (garch_vol**2)) ** 0.5
+            garch_forecast.append(round(garch_vol, 4))
+        garch_10d_vol = round(sum(garch_forecast)/len(garch_forecast), 4) if garch_forecast else sigma_daily
+
+        # ─── Monte Carlo (1000 paths × 21 days) ───
+        mc_paths = 1000; mc_days = 21
+        mc_returns = []
+        for _ in range(mc_paths):
+            path = [closes[-1]]
+            for __ in range(mc_days):
+                shock = mu_daily/100 + sigma_daily/100 * (sum([__import__('random').gauss(0,1) for _ in range(12)]) - 6)  # approx normal via CLT
+                path.append(path[-1] * (1 + shock))
+            mc_returns.append((path[-1] - path[0]) / path[0] * 100)
+        mc_returns.sort()
+        mc_median = round(mc_returns[len(mc_returns)//2], 2)
+        mc_p5 = round(mc_returns[int(len(mc_returns)*0.05)], 2)
+        mc_p95 = round(mc_returns[int(len(mc_returns)*0.95)], 2)
+        mc_up_prob = round(sum(1 for r in mc_returns if r > 0) / mc_paths * 100, 1)
+
         return jsonify({
             "symbol": symbol,
             "dates": dates,
@@ -2284,6 +2386,37 @@ def api_stock_technicals(symbol):
             "dist_bins": [round(b,4) for b in bins[:-1]],
             "dist_counts": hist,
             "dist_min": round(min_r,4), "dist_max": round(max_r,4),
+            # Quant metrics
+            "quant": {
+                "mu_daily": round(mu_daily, 4),
+                "mu_annual": round(mu_annual, 2),
+                "sigma_daily": round(sigma_daily, 4),
+                "sigma_annual": round(sigma_annual, 2),
+                "sharpe": round(sharpe, 2),
+                "var_95": round(var_95, 2),
+                "cvar_95": round(cvar_95, 2),
+                "skew": round(skew, 3),
+                "excess_kurt": round(excess_kurt, 3),
+                "jb_stat": round(jb_stat, 2),
+                "jb_pvalue": round(jb_pvalue, 4),
+                "is_normal": is_normal,
+                "max_dd": round(max_dd, 2),
+                "win_rate": round(win_rate, 1),
+                "best_day": round(best_day, 2),
+                "worst_day": round(worst_day, 2),
+                "avg_pos": round(avg_pos, 2),
+                "avg_neg": round(avg_neg, 2),
+                "n_days": m,
+                "beta_spy": beta_spy,
+                "r_squared": r_squared,
+                "sys_risk": sys_risk,
+                "idiosyncratic_risk": idiosyncratic_risk,
+                "garch_10d_vol": garch_10d_vol,
+                "mc_median": mc_median,
+                "mc_p5": mc_p5,
+                "mc_p95": mc_p95,
+                "mc_up_prob": mc_up_prob,
+            }
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
