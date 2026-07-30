@@ -1124,7 +1124,69 @@ async function showQuant(symbol) {
     const color = (v, good) => good ? (v>=0?'var(--red)':'var(--green)') : 'var(--text)';
     const sign = v => (v>0?'+':'') + v.toFixed(2);
 
-    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:12px">';
+    // ── Stock Personality Analysis ──
+    const genAnalysis = () => {
+      let lines = [];
+      const b = q.beta_spy, r2 = q.r_squared, vol = q.sigma_annual, sk = q.skew, ek = q.excess_kurt;
+
+      // Beta analysis
+      if (b != null && r2 != null) {
+        if (b > 1.5 && r2 > 0.4) {
+          lines.push('📈 <b>大盘放大器</b>：β=' + b.toFixed(1) + '，R²=' + (r2*100).toFixed(0) + '%，' + symbol + ' 与SPY高度同步，但波动放大' + b.toFixed(0) + '倍。大盘涨1%，它涨' + b.toFixed(1) + '%。牛市利器，熊市加倍受伤。');
+        } else if (b > 1 && r2 > 0.4) {
+          lines.push('📊 <b>温和放大</b>：β=' + b.toFixed(1) + '，与大盘正相关但波动略高。适合作为市场Beta敞口的替代品。');
+        } else if (b < 0) {
+          lines.push('🔄 <b>反向指标</b>：β=' + b.toFixed(1) + '，与大盘反向而行。大盘涨时它跌，大盘跌时它涨。天然对冲工具，但R²仅' + (r2*100).toFixed(0) + '%。');
+        } else if (b > 0 && b < 0.5 && r2 < 0.3) {
+          lines.push('🔒 <b>独立行情</b>：β=' + b.toFixed(1) + '但R²仅' + (r2*100).toFixed(0) + '%。' + symbol + ' 的走势主要由自身因素驱动，与大盘关系很弱。SPY对冲无效，必须独立研究。');
+        } else if (b > 0 && r2 < 0.3) {
+          lines.push('⚠️ <b>β不可信</b>：虽然β=' + b.toFixed(1) + '，但R²只有' + (r2*100).toFixed(0) + '%。' + (r2*100).toFixed(0) + '%的波动是' + symbol + '自己的事，β不具参考价值。');
+        }
+      }
+
+      // Volatility analysis
+      if (vol > 60) {
+        lines.push('🚀 <b>极端波动</b>：年化波动率' + vol.toFixed(0) + '%，是大盘(~15%)的'+(vol/15).toFixed(0)+'倍。一天涨跌3-5%是常态，不适合重仓或杠杆。');
+      } else if (vol > 35) {
+        lines.push('⚡ <b>高波动</b>：年化' + vol.toFixed(0) + '%，远高于大盘。波动是收益的来源也是风险的来源，建议控制仓位。');
+      } else if (vol < 20) {
+        lines.push('🛡️ <b>低波动</b>：年化仅' + vol.toFixed(0) + '%，走势稳健。适合作为组合的压舱石，但上行空间也相对有限。');
+      }
+
+      // Skew + Kurtosis analysis
+      if (sk < -0.5 && ek > 2) {
+        lines.push('💣 <b>左偏+厚尾</b>：偏度' + sk.toFixed(2) + '，超额峰度' + ek.toFixed(1) + '。大部分日子小涨，但偶尔出现极端暴跌。标准差严重低估真实风险，VaR也偏乐观——CVaR才是真实风险底线。');
+      } else if (sk > 0.5 && ek > 2) {
+        lines.push('🎰 <b>右偏+厚尾</b>：偏度' + sk.toFixed(2) + '。平常平淡无奇，但偶尔暴力拉升。像买彩票——大多数日子无聊，少数日子暴赚。适合小仓位搏收益。');
+      } else if (ek > 3) {
+        lines.push('🌪️ <b>肥尾严重</b>：超额峰度' + ek.toFixed(1) + '。极端事件频率远高于正态分布预测，黑天鹅风险不容忽视。');
+      }
+
+      // Risk-adjusted
+      if (q.sharpe > 1.5) {
+        lines.push('🏆 <b>高夏普</b>：夏普比率' + q.sharpe.toFixed(1) + '，每承担1%波动换来' + q.sharpe.toFixed(1) + '%超额回报。风险调整后收益出色。');
+      } else if (q.sharpe < 0) {
+        lines.push('📉 <b>负夏普</b>：风险调整后收益为负，承担了波动却没有获得相应的回报。不如存银行。');
+      }
+
+      // MC outlook
+      if (q.mc_up_prob > 60) {
+        lines.push('🔮 <b>偏乐观</b>：蒙特卡洛模拟21天上涨概率' + q.mc_up_prob.toFixed(0) + '%，中位数回报' + sign(q.mc_median) + '%。');
+      } else if (q.mc_up_prob < 40) {
+        lines.push('🔮 <b>偏悲观</b>：蒙特卡洛模拟21天上涨概率仅' + q.mc_up_prob.toFixed(0) + '%，短期风险偏高。');
+      }
+
+      if (lines.length === 0) lines.push('📋 该股票各项指标均处于正常范围，无明显极端特征。');
+
+      return '<div style="background:var(--bg);border-radius:10px;padding:16px;border:1px solid var(--border);border-left:4px solid var(--accent);margin-bottom:12px;line-height:1.7;font-size:13px">' +
+        '<h4 style="font-size:14px;color:var(--accent);margin:0 0 10px 0">🧠 ' + symbol + ' 行为画像</h4>' +
+        lines.map(l => '<p style="margin:4px 0">' + l + '</p>').join('') +
+        '<p style="margin-top:8px;font-size:10px;color:var(--muted)">⚠️ 以上分析基于近1年历史数据的量化指标自动生成，不构成投资建议。历史规律可能在未来失效。</p>' +
+        '</div>';
+    };
+
+    let html = genAnalysis();
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin-top:12px">';
 
     // ── ① 基础面板：回报与波动 ──
     html += '<div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border)">';
