@@ -38,6 +38,7 @@ YF_HEADERS = {
 # ── News Cache ─────────────────────────────────────────────
 _news_cache = {}  # {market: (timestamp, articles)}
 _kol_cache = {}   # {market: (timestamp, articles)}
+_technicals_cache = {}  # {symbol: (timestamp, data)} — 30 day TTL
 _news_cache_lock = threading.Lock()
 
 # ── KOL Twitter Accounts ──────────────────────────────────
@@ -2221,7 +2222,15 @@ def api_stock_history(symbol):
 
 @app.route('/api/stock/<symbol>/technicals')
 def api_stock_technicals(symbol):
-    """Return comprehensive technical indicators for a stock."""
+    """Return comprehensive technical + quant indicators (cached 30 days)."""
+    # Check cache first
+    now = time.time()
+    cached = _technicals_cache.get(symbol.upper())
+    if cached and (now - cached[0]) < 2592000:  # 30 days
+        resp = jsonify(cached[1])
+        resp.headers['X-Cache'] = 'HIT'
+        return resp
+
     try:
         # Fetch 1 year of daily data
         url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=1y"
@@ -2403,7 +2412,7 @@ def api_stock_technicals(symbol):
         mc_p95 = round(mc_returns[int(len(mc_returns)*0.95)], 2)
         mc_up_prob = round(sum(1 for r in mc_returns if r > 0) / mc_paths * 100, 1)
 
-        return jsonify({
+        resp_data = {
             "symbol": symbol,
             "dates": dates,
             "closes": [round(c,4) for c in closes],
@@ -2451,8 +2460,12 @@ def api_stock_technicals(symbol):
                 "mc_p5": mc_p5,
                 "mc_p95": mc_p95,
                 "mc_up_prob": mc_up_prob,
+                "cached_at": datetime.now().strftime('%Y-%m-%d'),
             }
-        })
+        }
+        # Cache for 30 days
+        _technicals_cache[symbol.upper()] = (time.time(), resp_data)
+        return jsonify(resp_data)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
