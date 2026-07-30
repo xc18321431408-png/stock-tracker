@@ -196,7 +196,11 @@ canvas{max-height:380px}
 
 <!-- Status Monitor -->
 <div id="statusMonitor" style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 16px;margin-bottom:12px;font-size:12px;display:none">
-  <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap" id="statusContent"></div>
+  <div id="statusBar" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;cursor:pointer" onclick="toggleStatusDetail()">
+    <span id="statusSummary"></span>
+    <span style="font-size:10px;color:var(--muted)" id="statusExpandHint">▼ 展开</span>
+  </div>
+  <div id="statusDetail" style="display:none;margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"></div>
 </div>
 
 <!-- News Panel -->
@@ -2243,34 +2247,84 @@ setInterval(() => {
 setInterval(() => { loadNews(); }, 900000);
 
 // ── Data Freshness Monitor ──
+let _lastStatus = null;
+let _statusExpanded = false;
+
 async function checkStatus() {
   try {
     const resp = await fetch('/api/health');
     const d = await resp.json();
-    const el = document.getElementById('statusContent');
-    if (!el) return;
+    _lastStatus = d;
     document.getElementById('statusMonitor').style.display = 'block';
 
     const checks = d.checks || {};
-    let html = '<span style="font-weight:700;color:var(--accent)">📡 数据更新状态</span>';
+    const staleCount = Object.values(checks).filter(c => !c.ok).length;
+
+    let summary = '<span style="font-weight:700;color:var(--accent)">📡 数据状态</span> ';
+    if (staleCount === 0) {
+      summary += '<span style="color:var(--green)">🟢 全部正常</span>';
+    } else {
+      summary += '<span style="color:var(--red)">🔴 ' + staleCount + '项异常</span>';
+    }
     for (const [key, c] of Object.entries(checks)) {
-      const icon = c.ok ? '🟢' : '🔴';
-      let detail = '';
-      if (c.latest_date) detail = c.latest_date + ' | ' + c.sectors + '个板块';
-      if (c.last_refresh) detail = c.last_refresh;
-      if (c.next_update) detail += ' | 下次 ' + c.next_update;
-      if (c.interval) detail = '每' + c.interval;
-      if (c.cached_reports !== undefined) detail = c.cached_reports + '份已缓存';
-      html += ' <span style="margin-left:8px;color:var(--muted)">' + icon + ' ' + c.name + (detail?' <span style="font-size:10px">' + detail + '</span>':'') + '</span>';
+      summary += ' <span style="color:var(--muted)">' + (c.ok?'🟢':'🔴') + ' ' + c.name + '</span>';
     }
-    if (d.status === 'stale') {
-      html += ' <span style="margin-left:12px;color:var(--red);font-weight:600">⚠️ 有数据过期</span>';
-    }
-    el.innerHTML = html;
+    document.getElementById('statusSummary').innerHTML = summary;
+
+    if (_statusExpanded) renderStatusDetail(d);
   } catch(e) {}
 }
+
+function refreshItem(type) {
+  const btn = document.getElementById('btn-refresh-' + type);
+  if (btn) { btn.textContent = '⏳ 更新中...'; btn.disabled = true; }
+  let url = '';
+  if (type === 'us') url = '/api/latest?date=' + new Date().toISOString().slice(0,10);
+  else if (type === 'cn') url = '/api/cn/latest?date=' + new Date().toISOString().slice(0,10);
+  else if (type === 'kol') { fetch('/api/news?limit=1'); setTimeout(checkStatus, 3000); return; }
+  else if (type === 'reports') { checkStatus(); return; }
+  fetch(url).then(r => r.json()).then(() => {
+    setTimeout(checkStatus, 5000);
+  }).catch(() => {
+    if (btn) { btn.textContent = '🔄 重试'; btn.disabled = false; }
+  });
+}
+
+function renderStatusDetail(d) {
+  const checks = d.checks || {};
+  let html = '';
+  for (const [key, c] of Object.entries(checks)) {
+    const borderColor = c.ok ? 'var(--green)' : 'var(--red)';
+    let detail = '';
+    if (c.latest_date) detail += '<div>📅 最新数据：<b>' + c.latest_date + '</b>（' + c.sectors + '个板块）</div>';
+    if (c.fetched_at) detail += '<div>⏱️ 上次抓取：' + c.fetched_at + '</div>';
+    if (c.next_update) detail += '<div>⏰ 下次定时更新：' + c.next_update + '</div>';
+    if (c.last_refresh) detail += '<div>🕐 上次刷新：' + c.last_refresh + '</div>';
+    if (c.interval) detail += '<div>🔁 频率：每' + c.interval + '</div>';
+    if (c.cached_reports !== undefined) detail += '<div>📊 已缓存：' + c.cached_reports + '份</div>';
+
+    const btnLabel = (key === 'us' || key === 'cn') ? '🔄 立即抓取' : (key === 'kol' ? '🔄 刷新推文' : '🔄 清缓存');
+    const refreshBtn = '<button id="btn-refresh-' + key + '" onclick="event.stopPropagation();refreshItem(\'' + key + '\')" style="margin-top:4px;padding:4px 12px;background:var(--accent);border:none;color:#fff;border-radius:5px;cursor:pointer;font-size:11px">' + btnLabel + '</button>';
+
+    html += '<div style="background:var(--bg);border-radius:8px;padding:10px 14px;margin-bottom:6px;border-left:3px solid ' + borderColor + '">' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
+      '<div><b>' + (c.ok?'🟢':'🔴') + ' ' + c.name + '</b>' + detail + '</div>' +
+      '<div style="text-align:right">' + (c.ok ? '' : refreshBtn) + '</div>' +
+      '</div></div>';
+  }
+  html += '<div style="font-size:10px;color:var(--muted);text-align:center;margin-top:6px">检测时间：' + (d.time||'') + ' | 每5分钟自动检测 | 异常项可点击按钮手动更新</div>';
+  document.getElementById('statusDetail').innerHTML = html;
+}
+
+function toggleStatusDetail() {
+  _statusExpanded = !_statusExpanded;
+  document.getElementById('statusDetail').style.display = _statusExpanded ? 'block' : 'none';
+  document.getElementById('statusExpandHint').textContent = _statusExpanded ? '▲ 收起' : '▼ 展开';
+  if (_statusExpanded && _lastStatus) renderStatusDetail(_lastStatus);
+}
+
 checkStatus();
-setInterval(checkStatus, 300000); // every 5 min
+setInterval(checkStatus, 300000);
 </script>
 </body>
 </html>
