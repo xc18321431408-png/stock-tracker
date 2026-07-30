@@ -1124,64 +1124,100 @@ async function showQuant(symbol) {
     const color = (v, good) => good ? (v>=0?'var(--red)':'var(--green)') : 'var(--text)';
     const sign = v => (v>0?'+':'') + v.toFixed(2);
 
-    // ── Stock Personality Analysis ──
+    // ── 详细个股研究报告 ──
     const genAnalysis = () => {
-      let lines = [];
       const b = q.beta_spy, r2 = q.r_squared, vol = q.sigma_annual, sk = q.skew, ek = q.excess_kurt;
+      let sections = [];
 
-      // Beta analysis
+      // ===== 1. 收益与风险总览 =====
+      let s1 = '<b>📊 收益与风险概况</b><br>';
+      s1 += symbol + ' 近一年年化收益率 <b style="color:'+(q.mu_annual>=0?'var(--red)':'var(--green)')+'">' + sign(q.mu_annual) + '%</b>，';
+      s1 += '年化波动率 <b>' + vol.toFixed(1) + '%</b>' + (vol>40?'（高波动，远超大盘约15%的水平）':vol>25?'（中等偏高波动）':'（波动适中）') + '。';
+      s1 += '夏普比率 <b>' + q.sharpe.toFixed(2) + '</b>' + (q.sharpe>1.5?'，风险调整后收益非常出色，每承担1%的波动获得了远超市场的回报。':q.sharpe>0.5?'，风险调整后表现尚可，但不算突出。':q.sharpe<0?'，这意味着你承担了波动却没能获得相应回报——波动率在这里是"白受罪"。':'，风险调整后收益一般。');
+      sections.push(s1);
+
+      // ===== 2. 市场联动性 =====
       if (b != null && r2 != null) {
-        if (b > 1.5 && r2 > 0.4) {
-          lines.push('📈 <b>大盘放大器</b>：β=' + b.toFixed(1) + '，R²=' + (r2*100).toFixed(0) + '%，' + symbol + ' 与SPY高度同步，但波动放大' + b.toFixed(0) + '倍。大盘涨1%，它涨' + b.toFixed(1) + '%。牛市利器，熊市加倍受伤。');
-        } else if (b > 1 && r2 > 0.4) {
-          lines.push('📊 <b>温和放大</b>：β=' + b.toFixed(1) + '，与大盘正相关但波动略高。适合作为市场Beta敞口的替代品。');
-        } else if (b < 0) {
-          lines.push('🔄 <b>反向指标</b>：β=' + b.toFixed(1) + '，与大盘反向而行。大盘涨时它跌，大盘跌时它涨。天然对冲工具，但R²仅' + (r2*100).toFixed(0) + '%。');
-        } else if (b > 0 && b < 0.5 && r2 < 0.3) {
-          lines.push('🔒 <b>独立行情</b>：β=' + b.toFixed(1) + '但R²仅' + (r2*100).toFixed(0) + '%。' + symbol + ' 的走势主要由自身因素驱动，与大盘关系很弱。SPY对冲无效，必须独立研究。');
-        } else if (b > 0 && r2 < 0.3) {
-          lines.push('⚠️ <b>β不可信</b>：虽然β=' + b.toFixed(1) + '，但R²只有' + (r2*100).toFixed(0) + '%。' + (r2*100).toFixed(0) + '%的波动是' + symbol + '自己的事，β不具参考价值。');
+        let s2 = '<b>🔗 与大盘的关系</b><br>';
+        const r2pct = (r2 * 100).toFixed(0);
+        if (b > 1.3 && r2 > 0.4) {
+          s2 += symbol + ' 是典型的<b style="color:var(--red)">大盘放大器</b>。β=' + b.toFixed(2) + '，意味着SPY涨1%，它平均涨' + b.toFixed(2) + '%；同理SPY跌1%，它平均跌' + b.toFixed(2) + '%。R²=' + r2pct + '%说明这种关系比较可靠——' + symbol + ' 的走势' + r2pct + '%可以用大盘涨跌来解释。';
+          s2 += '<br><br>💡 <b>实战含义</b>：牛市里它跑赢大盘，适合作为进攻仓位；熊市里它会加速亏损，必须设好止损。如果你想做多SPY但想要放大收益，这只股票是天然替代品。如果你已经持有大量SPY，再加这只等于加杠杆——注意集中度风险。';
+        } else if (b > 0.5 && r2 > 0.3) {
+          s2 += symbol + ' 与大盘<b>温和正相关</b>。β=' + b.toFixed(2) + '，R²=' + r2pct + '%。大盘涨它大概率跟涨，但幅度没那么极端。';
+        } else if (b < -0.3) {
+          s2 += symbol + ' 与大盘<b style="color:var(--green)">反向而行</b>。β=' + b.toFixed(2) + '，说明SPY涨的时候它反而倾向于下跌。' + (r2>0.3?'R²='+r2pct+'%，这种反向关系有一定可靠性。':'但R²只有'+r2pct+'%，反向关系不太稳定，不能完全依赖它做对冲。');
+        } else {
+          s2 += symbol + ' 与大盘<b>关系很弱</b>。β=' + b.toFixed(2) + '，R²仅' + r2pct + '%。这意味着' + symbol + ' ' + (100-parseInt(r2pct)) + '%的涨跌是由它自身因素（公司业绩、行业动态、个股消息）驱动的，跟大盘关系不大。';
+          s2 += '<br><br>💡 <b>实战含义</b>：不能通过做空SPY来对冲' + symbol + '的下跌风险，因为两者不怎么相关。研究这只股票必须深入了解它所在的行业和公司本身，光看大盘没用。';
         }
+        sections.push(s2);
       }
 
-      // Volatility analysis
-      if (vol > 60) {
-        lines.push('🚀 <b>极端波动</b>：年化波动率' + vol.toFixed(0) + '%，是大盘(~15%)的'+(vol/15).toFixed(0)+'倍。一天涨跌3-5%是常态，不适合重仓或杠杆。');
-      } else if (vol > 35) {
-        lines.push('⚡ <b>高波动</b>：年化' + vol.toFixed(0) + '%，远高于大盘。波动是收益的来源也是风险的来源，建议控制仓位。');
-      } else if (vol < 20) {
-        lines.push('🛡️ <b>低波动</b>：年化仅' + vol.toFixed(0) + '%，走势稳健。适合作为组合的压舱石，但上行空间也相对有限。');
+      // ===== 3. 尾部风险详细描述 =====
+      let s3 = '<b>🎯 尾部风险画像</b><br>';
+      s3 += '偏度 <b>' + sk.toFixed(3) + '</b>' + (sk<-0.5?'（显著左偏）':sk<-0.2?'（轻微左偏）':sk>0.5?'（显著右偏）':sk>0.2?'（轻微右偏）':'（接近对称）') + '，';
+      s3 += '超额峰度 <b>' + ek.toFixed(3) + '</b>' + (ek>3?'（极度厚尾，极端事件频发）':ek>1?'（厚尾，比正态分布更容易出现极端值）':ek>0?'（轻微厚尾）':ek<-0.3?'（薄尾，极端事件较少）':'（接近正态）') + '。';
+
+      if (ek > 3) {
+        s3 += '<br><br>🚨 <b style="color:var(--red)">这是高风险特征</b>——超额峰度达到' + ek.toFixed(1) + '，意味着3倍标准差事件的发生频率大约是正态分布预测的' + (Math.exp(ek/2)).toFixed(0) + '倍。';
+        if (sk < -0.5) {
+          s3 += '加上左偏的特征，说明这些极端事件集中在<b style="color:var(--red)">暴跌方向</b>。平时小涨小跌看起来很温和，但隔几个月就可能来一次"闪崩"。标准差和VaR都会严重低估真实风险。';
+          s3 += '<br><br>📋 <b>应对建议</b>：① 设止损单（不能"扛一扛"）；② 控制仓位不超过组合的5-10%；③ 用CVaR而不是VaR来评估风险——CVaR告诉我如果真的崩了平均会亏<b style="color:var(--red)">' + (-q.cvar_95).toFixed(1) + '%</b>（一天内），远超VaR的' + (-q.var_95).toFixed(1) + '%。';
+        }
+      } else if (ek < 0) {
+        s3 += '<br><br>✅ 这是相对有利的特征——极端事件出现频率低于正态分布预测，说明' + symbol + '的价格波动相对"规矩"，不太容易出现意外的大幅波动。风险模型（VaR、波动率）的预测会比较准确。';
       }
 
-      // Skew + Kurtosis analysis
-      if (sk < -0.5 && ek > 2) {
-        lines.push('💣 <b>左偏+厚尾</b>：偏度' + sk.toFixed(2) + '，超额峰度' + ek.toFixed(1) + '。大部分日子小涨，但偶尔出现极端暴跌。标准差严重低估真实风险，VaR也偏乐观——CVaR才是真实风险底线。');
-      } else if (sk > 0.5 && ek > 2) {
-        lines.push('🎰 <b>右偏+厚尾</b>：偏度' + sk.toFixed(2) + '。平常平淡无奇，但偶尔暴力拉升。像买彩票——大多数日子无聊，少数日子暴赚。适合小仓位搏收益。');
-      } else if (ek > 3) {
-        lines.push('🌪️ <b>肥尾严重</b>：超额峰度' + ek.toFixed(1) + '。极端事件频率远高于正态分布预测，黑天鹅风险不容忽视。');
+      if (q.is_normal) {
+        s3 += '<br><br>✅ Jarque-Bera检验p=' + q.jb_pvalue.toFixed(4) + '，<b style="color:var(--green)">不能拒绝正态分布假设</b>。这意味着传统的风险指标（标准差、VaR、夏普比率）对这个股票基本适用。';
+      } else if (!q.is_normal && ek < 3) {
+        s3 += '<br><br>⚠️ Jarque-Bera检验p=' + q.jb_pvalue.toFixed(4) + '（<0.05），<b>拒绝了正态分布假设</b>。虽然偏离不极端，但标准差和夏普比率给出的风险评估偏乐观，建议同时参考偏度和CVaR。';
       }
+      sections.push(s3);
 
-      // Risk-adjusted
-      if (q.sharpe > 1.5) {
-        lines.push('🏆 <b>高夏普</b>：夏普比率' + q.sharpe.toFixed(1) + '，每承担1%波动换来' + q.sharpe.toFixed(1) + '%超额回报。风险调整后收益出色。');
-      } else if (q.sharpe < 0) {
-        lines.push('📉 <b>负夏普</b>：风险调整后收益为负，承担了波动却没有获得相应的回报。不如存银行。');
+      // ===== 4. 交易特征 =====
+      let s4 = '<b>📋 交易特征</b><br>';
+      s4 += '过去' + q.n_days + '个交易日中，<b>' + q.win_rate.toFixed(0) + '%</b>的日子上涨。';
+      s4 += '平均涨日涨幅 <b style="color:var(--red)">+' + q.avg_pos.toFixed(2) + '%</b>，平均跌日跌幅 <b style="color:var(--green)">' + q.avg_neg.toFixed(2) + '%</b>。';
+      const pnRatio = Math.abs(q.avg_pos / q.avg_neg);
+      s4 += '涨跌比 <b>' + pnRatio.toFixed(2) + '</b>' + (pnRatio>1.5?'——涨的时候涨幅明显大于跌的时候跌幅，这是好信号。':pnRatio>1?'——涨跌幅基本对称。':pnRatio>0.7?'——跌的时候比涨的时候更猛烈，这不是好信号。':'——跌的时候跌幅远大于涨的时候涨幅，典型的"小涨大跌"模式。');
+
+      s4 += '<br><br>历史最佳单日：<b style="color:var(--red)">+' + q.best_day.toFixed(2) + '%</b>，';
+      s4 += '历史最差单日：<b style="color:var(--green)">' + q.worst_day.toFixed(2) + '%</b>。';
+      s4 += '最大回撤：<b style="color:var(--red)">-' + q.max_dd.toFixed(1) + '%</b>' + (q.max_dd>30?'（相当大，说明历史上曾经历过大幅回调，需要有心理准备）。':q.max_dd>15?'（中等水平，正常波动范围）。':'（控制得不错）。');
+      sections.push(s4);
+
+      // ===== 5. 前瞻预测 =====
+      let s5 = '<b>🔮 前瞻预测</b><br>';
+      s5 += 'GARCH(1,1)模型预测未来10个交易日的日均波动率约为 <b>' + q.garch_10d_vol.toFixed(2) + '%</b>' + (q.garch_10d_vol>q.sigma_daily*1.2?'（高于近期平均水平，说明模型认为波动可能加大）。':q.garch_10d_vol<q.sigma_daily*0.8?'（低于近期平均水平，波动可能在收敛）。':'（与近期水平接近）。');
+
+      s5 += '<br><br>蒙特卡洛模拟（1000条路径×21个交易日）：中位数预测回报 <b style="color:'+(q.mc_median>=0?'var(--red)':'var(--green)')+'">' + sign(q.mc_median) + '%</b>，';
+      s5 += '95%置信区间 [<b>' + q.mc_p5.toFixed(1) + '%</b>, <b>' + q.mc_p95.toFixed(1) + '%</b>]，';
+      s5 += '上涨概率 <b>' + q.mc_up_prob.toFixed(0) + '%</b>。';
+
+      const range = q.mc_p95 - q.mc_p5;
+      s5 += '<br><br>📏 21天预测区间宽度为' + range.toFixed(0) + '个百分点' + (range>30?'——很宽，说明短期走向高度不确定，这是'+(vol>40?'高波动股票的典型特征。':'需要关注的风险信号。'):'——相对较窄，短期走势有一定的可预测性。');
+      sections.push(s5);
+
+      // ===== 6. 综合评级 =====
+      let s6 = '<b>⭐ 综合评估</b><br>';
+      const score = (q.sharpe>1?2:q.sharpe>0?1:0) + (vol<30?1:(vol>50?-1:0)) + (ek<2?1:(ek>4?-1:0)) + (pnRatio>1.2?1:0) + (q.mc_up_prob>55?1:0);
+      if (score >= 4) {
+        s6 += '综合量化评分：<b style="color:var(--red)">优秀</b>（' + score + '/5）。风险调整收益好、波动适中、尾部风险可控、短期展望偏乐观。适合作为核心持仓，但仍需注意仓位管理和个股基本面研究。';
+      } else if (score >= 3) {
+        s6 += '综合量化评分：<b style="color:var(--accent)">良好</b>（' + score + '/5）。整体特征偏正面，但存在个别需要关注的风险点。适合作为卫星仓位，建议持续跟踪量化指标的变化。';
+      } else if (score >= 2) {
+        s6 += '综合量化评分：<b style="color:var(--gold)">中性</b>（' + score + '/5）。利弊参半，没有明显的极端优势也没有致命缺陷。是否配置取决于你对它基本面的判断——量化数据给不出强烈的方向信号。';
+      } else {
+        s6 += '综合量化评分：<b style="color:var(--red)">谨慎</b>（' + score + '/5）。量化指标显示了多个风险信号（' + (vol>40?'高波动、':'') + (ek>3?'厚尾、':'') + (q.sharpe<0?'负夏普、':'') + (q.mc_up_prob<40?'短期偏空':'') + '）。如果确实看好基本面，建议严格控仓+设止损。';
       }
+      sections.push(s6);
 
-      // MC outlook
-      if (q.mc_up_prob > 60) {
-        lines.push('🔮 <b>偏乐观</b>：蒙特卡洛模拟21天上涨概率' + q.mc_up_prob.toFixed(0) + '%，中位数回报' + sign(q.mc_median) + '%。');
-      } else if (q.mc_up_prob < 40) {
-        lines.push('🔮 <b>偏悲观</b>：蒙特卡洛模拟21天上涨概率仅' + q.mc_up_prob.toFixed(0) + '%，短期风险偏高。');
-      }
-
-      if (lines.length === 0) lines.push('📋 该股票各项指标均处于正常范围，无明显极端特征。');
-
-      return '<div style="background:var(--bg);border-radius:10px;padding:16px;border:1px solid var(--border);border-left:4px solid var(--accent);margin-bottom:12px;line-height:1.7;font-size:13px">' +
-        '<h4 style="font-size:14px;color:var(--accent);margin:0 0 10px 0">🧠 ' + symbol + ' 行为画像</h4>' +
-        lines.map(l => '<p style="margin:4px 0">' + l + '</p>').join('') +
-        '<p style="margin-top:8px;font-size:10px;color:var(--muted)">⚠️ 以上分析基于近1年历史数据的量化指标自动生成，不构成投资建议。历史规律可能在未来失效。</p>' +
+      return '<div style="background:linear-gradient(135deg,var(--bg),rgba(56,189,248,0.03));border-radius:12px;padding:20px;border:1px solid var(--border);border-left:4px solid var(--accent);margin-bottom:16px;line-height:1.85;font-size:13px;color:var(--text)">' +
+        '<h3 style="font-size:16px;color:var(--accent);margin:0 0 16px 0">🧠 ' + symbol + ' 量化深度研究报告</h3>' +
+        sections.map(s => '<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid rgba(255,255,255,0.04)">' + s + '</div>').join('') +
+        '<p style="margin-top:12px;font-size:10px;color:var(--muted);text-align:center">⚠️ 本报告基于近' + q.n_days + '个交易日历史数据的量化指标自动生成。所有分析描述的是历史统计特征，不代表未来必然重演。不构成投资建议。投资决策请结合基本面、行业趋势和个人风险承受能力综合判断。</p>' +
         '</div>';
     };
 
