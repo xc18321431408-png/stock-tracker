@@ -2621,8 +2621,10 @@ def api_health():
         us_latest = conn.execute("SELECT MAX(date), MAX(fetched_at) FROM sector_data").fetchone()
         us_count = conn.execute("SELECT COUNT(*) FROM sector_data WHERE date=(SELECT MAX(date) FROM sector_data)").fetchone()[0]
     us_date, us_fetched = us_latest
-    us_expected = now.strftime('%Y-%m-%d') if now.hour >= 5 else (now-timedelta(days=1)).strftime('%Y-%m-%d')
-    us_stale = us_date != us_expected and us_date != (now-timedelta(days=1)).strftime('%Y-%m-%d')
+    # Stale = no data in the last 2 calendar days (covers weekends/holidays)
+    us_today = now.strftime('%Y-%m-%d')
+    us_yesterday = (now - timedelta(days=1)).strftime('%Y-%m-%d')
+    us_stale = us_date != us_today and us_date != us_yesterday
     status["checks"]["us"] = {
         "name": "美股数据",
         "latest_date": us_date, "sectors": us_count,
@@ -2636,8 +2638,9 @@ def api_health():
         cn_latest = conn.execute("SELECT MAX(date), MAX(fetched_at) FROM sector_data").fetchone()
         cn_count = conn.execute("SELECT COUNT(*) FROM sector_data WHERE date=(SELECT MAX(date) FROM sector_data)").fetchone()[0]
     cn_date, cn_fetched = cn_latest
-    cn_expected = now.strftime('%Y-%m-%d') if now.hour >= 16 else (now-timedelta(days=1)).strftime('%Y-%m-%d')
-    cn_stale = cn_date != cn_expected and cn_date != (now-timedelta(days=1)).strftime('%Y-%m-%d')
+    cn_today = now.strftime('%Y-%m-%d')
+    cn_yesterday = (now - timedelta(days=1)).strftime('%Y-%m-%d')
+    cn_stale = cn_date != cn_today and cn_date != cn_yesterday
     status["checks"]["cn"] = {
         "name": "A股数据", "latest_date": cn_date, "sectors": cn_count,
         "fetched_at": cn_fetched,
