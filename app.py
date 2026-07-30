@@ -1868,15 +1868,27 @@ def _refresh_kol_cache():
     except Exception as e:
         print(f"[KOL] Cache refresh failed: {e}")
 
+def _refresh_monthly_reports():
+    """Clear technicals cache on 1st of each month so stock reports regenerate."""
+    print("[Report] Monthly refresh: clearing stock report cache...")
+    with _news_cache_lock:
+        count = len(_technicals_cache)
+        _technicals_cache.clear()
+    print(f"[Report] Cleared {count} cached reports for monthly refresh")
+
+_last_fetch_time = {'us': None, 'cn': None, 'kol': None}
+
 scheduler = BackgroundScheduler(timezone='Asia/Shanghai')
-# 美股(北京时间): 03:30收盘前半小时 + 04:00收盘后立即更新
+# 美股(北京时间): 03:30收盘前半小时 + 04:30收盘后半小时
 scheduler.add_job(daily_fetch_job, 'cron', hour=3, minute=30)
-scheduler.add_job(daily_fetch_job, 'cron', hour=4, minute=0)
-# A股(北京时间): 14:30收盘前半小时 + 15:00收盘后立即更新
+scheduler.add_job(daily_fetch_job, 'cron', hour=4, minute=30)
+# A股(北京时间): 14:30收盘前半小时 + 15:30收盘后半小时
 scheduler.add_job(cn_daily_fetch_job, 'cron', hour=14, minute=30)
-scheduler.add_job(cn_daily_fetch_job, 'cron', hour=15, minute=0)
+scheduler.add_job(cn_daily_fetch_job, 'cron', hour=15, minute=30)
 # KOL tweets: refresh every 30 minutes
 scheduler.add_job(_refresh_kol_cache, 'interval', minutes=30)
+# Stock reports: refresh on 1st of each month at 8:00 AM
+scheduler.add_job(_refresh_monthly_reports, 'cron', day=1, hour=8, minute=0)
 scheduler.start()
 print("[Scheduler] Started: US 03:30/04:00, CN 14:30/15:00 (Beijing time)")
 
@@ -2600,9 +2612,60 @@ def api_cn_backtest():
 
 @app.route('/api/health')
 def api_health():
+    """Return system health + data freshness status."""
+    now = datetime.now()
+    status = {"status": "healthy", "time": now.isoformat(), "checks": {}}
+
+    # US data freshness
     with sqlite3.connect(DB_PATH) as conn:
-        count = conn.execute("SELECT COUNT(*) FROM sector_data").fetchone()[0]
-    return jsonify({"status": "healthy", "records": count, "time": datetime.now().isoformat()})
+        us_latest = conn.execute("SELECT MAX(date), MAX(fetched_at) FROM sector_data").fetchone()
+        us_count = conn.execute("SELECT COUNT(*) FROM sector_data WHERE date=(SELECT MAX(date) FROM sector_data)").fetchone()[0]
+    us_date, us_fetched = us_latest
+    us_expected = now.strftime('%Y-%m-%d') if now.hour >= 5 else (now-timedelta(days=1)).strftime('%Y-%m-%d')
+    us_stale = us_date != us_expected and us_date != (now-timedelta(days=1)).strftime('%Y-%m-%d')
+    status["checks"]["us"] = {
+        "name": "美股数据",
+        "latest_date": us_date, "sectors": us_count,
+        "fetched_at": us_fetched,
+        "next_update": _next_update_time('us'),
+        "ok": not us_stale
+    }
+
+    # CN data freshness
+    with sqlite3.connect(CN_DB_PATH) as conn:
+        cn_latest = conn.execute("SELECT MAX(date), MAX(fetched_at) FROM sector_data").fetchone()
+        cn_count = conn.execute("SELECT COUNT(*) FROM sector_data WHERE date=(SELECT MAX(date) FROM sector_data)").fetchone()[0]
+    cn_date, cn_fetched = cn_latest
+    cn_expected = now.strftime('%Y-%m-%d') if now.hour >= 16 else (now-timedelta(days=1)).strftime('%Y-%m-%d')
+    cn_stale = cn_date != cn_expected and cn_date != (now-timedelta(days=1)).strftime('%Y-%m-%d')
+    status["checks"]["cn"] = {
+        "name": "A股数据", "latest_date": cn_date, "sectors": cn_count,
+        "fetched_at": cn_fetched,
+        "next_update": _next_update_time('cn'),
+        "ok": not cn_stale
+    }
+
+    # KOL tweets
+    kol_cache_ts = _kol_cache.get('us', (0,))[0]
+    kol_age = (time.time() - kol_cache_ts) / 60 if kol_cache_ts else 999
+    status["checks"]["kol"] = {
+        "name": "KOL推文", "last_refresh": f"{kol_age:.0f}分钟前",
+        "interval": "30分钟",
+        "ok": kol_age < 45
+    }
+
+    # Stock reports
+    report_count = len(_technicals_cache)
+    status["checks"]["reports"] = {
+        "name": "个股报告", "cached_reports": report_count,
+        "next_refresh": now.replace(day=1).strftime('%Y-%m-%d') if now.day > 1 else now.strftime('%Y-%m-%d'),
+        "ok": True
+    }
+
+    # Overall
+    all_ok = all(c["ok"] for c in status["checks"].values())
+    status["status"] = "healthy" if all_ok else "stale"
+    return jsonify(status)
 
 # ── News API ──
 @app.route('/api/news')
@@ -2767,16 +2830,17 @@ def api_correlation():
 def _next_update_time(market):
     now = datetime.now()
     if market == 'us':
-        t4 = now.replace(hour=4, minute=0, second=0, microsecond=0)
-        t5 = now.replace(hour=5, minute=0, second=0, microsecond=0)
-        if now < t4: return t4.strftime('%m-%d %H:%M')
-        if now < t5: return t5.strftime('%m-%d %H:%M')
-        return (t4 + timedelta(days=1)).strftime('%m-%d %H:%M')
+        t1 = now.replace(hour=3, minute=30, second=0, microsecond=0)
+        t2 = now.replace(hour=4, minute=30, second=0, microsecond=0)
+        if now < t1: return t1.strftime('%m-%d %H:%M')
+        if now < t2: return t2.strftime('%m-%d %H:%M')
+        return (t1 + timedelta(days=1)).strftime('%m-%d %H:%M')
     else:
-        t14 = now.replace(hour=14, minute=30, second=0, microsecond=0)
-        t15 = now.replace(hour=15, minute=30, second=0, microsecond=0)
-        if now < t14: return t14.strftime('%m-%d %H:%M')
-        if now < t15: return t15.strftime('%m-%d %H:%M')
+        t1 = now.replace(hour=14, minute=30, second=0, microsecond=0)
+        t2 = now.replace(hour=15, minute=30, second=0, microsecond=0)
+        if now < t1: return t1.strftime('%m-%d %H:%M')
+        if now < t2: return t2.strftime('%m-%d %H:%M')
+        return (t1 + timedelta(days=1)).strftime('%m-%d %H:%M')
         return (t14 + timedelta(days=1)).strftime('%m-%d %H:%M')
 
 @app.route('/api/cn/latest')
