@@ -2277,16 +2277,28 @@ async function checkStatus() {
 
 function refreshItem(type) {
   const btn = document.getElementById('btn-refresh-' + type);
-  if (btn) { btn.textContent = '⏳ 更新中...'; btn.disabled = true; }
+  if (btn) { btn.textContent = '⏳ 抓取中...'; btn.disabled = true; }
   let url = '';
-  if (type === 'us') url = '/api/latest?date=' + new Date().toISOString().slice(0,10);
-  else if (type === 'cn') url = '/api/cn/latest?date=' + new Date().toISOString().slice(0,10);
-  else if (type === 'kol') { fetch('/api/news?limit=1'); setTimeout(checkStatus, 3000); return; }
+  if (type === 'us') url = '/api/latest?date=' + new Date().toISOString().slice(0,10) + '&force=1';
+  else if (type === 'cn') url = '/api/cn/latest?date=' + new Date().toISOString().slice(0,10) + '&force=1';
+  else if (type === 'kol') {
+    fetch('/api/news?limit=1').then(() => {
+      if (btn) { btn.textContent = '✅ 已刷新'; btn.disabled = false; }
+      setTimeout(checkStatus, 2000);
+    });
+    return;
+  }
   else if (type === 'reports') { checkStatus(); return; }
-  fetch(url).then(r => r.json()).then(() => {
-    setTimeout(checkStatus, 5000);
-  }).catch(() => {
-    if (btn) { btn.textContent = '🔄 重试'; btn.disabled = false; }
+  fetch(url).then(r => r.json()).then(data => {
+    if (data.error) {
+      if (btn) { btn.textContent = '❌ ' + data.error; btn.style.background = 'var(--red)'; }
+    } else {
+      const count = data.sectors ? data.sectors.length : '?';
+      if (btn) { btn.textContent = '✅ 已刷新 ' + count + '个板块'; btn.style.background = 'var(--green)'; }
+    }
+    setTimeout(checkStatus, 2000);
+  }).catch(e => {
+    if (btn) { btn.textContent = '❌ 网络失败，点此重试'; btn.disabled = false; btn.style.background = 'var(--red)'; }
   });
 }
 
