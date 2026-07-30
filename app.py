@@ -574,25 +574,33 @@ SECTOR_STOCKS = {
         ("ENPH","Enphase","微逆+储能"), ("FSLR","First Solar","薄膜光伏"),
         ("PLUG","Plug Power","氢燃料电池+绿氢"), ("BE","Bloom Energy","固体氧化物燃料电池"),
         ("NEE","NextEra","全球最大风电/光伏运营商"), ("BEP","Brookfield Renewable","全球可再生能源基础设施"),
-        ("CWEN","Clearway","美国清洁能源IPP"), ("AY","Atlantica","全球可再生能源资产"),
+        ("CWEN","Clearway","美国清洁能源IPP"), ("AY","Atlantica","全球可再生能源资产"),        ("SEDG","SolarEdge","光伏逆变器+储能解决方案"),
+        ("RUN","Sunrun","美国最大户用光伏+储能安装商"),
+
     ],
     "航空航天": [
         ("BA","波音","全球最大航空航天公司，客机+军工"), ("RTX","雷神技术","普惠发动机+柯林斯航空+导弹"),
         ("LMT","洛克希德马丁","全球最大军工企业，F-35制造商"), ("GD","通用动力","军用车辆/核潜艇/湾流公务机"),
         ("NOC","诺斯罗普格鲁曼","B-2/B-21隐身轰炸机制造商"), ("HWM","Howmet","航空发动机精密铸件领导者"),
-        ("TDG","TransDigm","航空零部件售后市场垄断者"), ("HEI","海科","航空电子/MRO零部件"),
+        ("TDG","TransDigm","航空零部件售后市场垄断者"), ("HEI","海科","航空电子/MRO零部件"),        ("SPR","Spirit Aerosystems","波音/空客核心机身结构件供应商"),
+        ("AXON","Axon","执法记录仪+泰瑟枪,航空航天国防科技"),
+
     ],
     "国防军工": [
         ("LMT","洛克希德马丁","F-35,导弹防御,太空系统"), ("RTX","雷神","爱国者导弹,发动机,传感器"),
         ("GD","通用动力","核潜艇,坦克,湾流"), ("NOC","诺斯罗普","隐身轰炸机,太空系统"),
         ("LHX","L3哈里斯","军用通信/电子战/ISR"), ("HII","亨廷顿英戈尔斯","美国最大军用造船商(航母/核潜艇)"),
-        ("KTOS","Kratos","高性价比无人机/靶机"), ("AVAV","AeroVironment","小型无人机/巡飞弹"),
+        ("KTOS","Kratos","高性价比无人机/靶机"), ("AVAV","AeroVironment","小型无人机/巡飞弹"),        ("CW","Curtiss-Wright","军用电子/执行器/核能控制"),
+        ("BWXT","BWX","核反应堆部件+海军核推进"),
+
     ],
     "零售": [
         ("AMZN","亚马逊","全球最大电商+云计算"), ("WMT","沃尔玛","全球最大实体零售商"),
         ("COST","好市多","会员制仓储零售之王"), ("HD","家得宝","全球最大家居建材零售商"),
         ("LOW","劳氏","第二大家居建材连锁"), ("TGT","塔吉特","时尚折扣百货零售商"),
-        ("TJX","TJX","全球最大折扣服装/家居零售商"), ("ROST","罗斯百货","折扣服装连锁"),
+        ("TJX","TJX","全球最大折扣服装/家居零售商"), ("ROST","罗斯百货","折扣服装连锁"),        ("EBAY","eBay","全球C2C/B2C电商交易平台"),
+        ("BBY","百思买","美国最大消费电子零售商"),
+
     ],
     "在线零售": [
         ("AMZN","亚马逊","全球电商+云计算霸主"), ("MELI","MercadoLibre","拉丁美洲最大电商+支付平台"),
@@ -604,7 +612,11 @@ SECTOR_STOCKS = {
     "房屋建筑": [
         ("DHI","DR Horton","美国最大住宅建筑商"), ("LEN","Lennar","第二大住宅建筑商"),
         ("PHM","PulteGroup","住宅建筑+金融服务"), ("NVR","NVR","高端住宅建筑+抵押贷款"),
-        ("TOL","Toll Brothers","美国最大豪华住宅建筑商"), ("KBH","KB Home","定制化住宅建筑商"),
+        ("TOL","Toll Brothers","美国最大豪华住宅建筑商"), ("KBH","KB Home","定制化住宅建筑商"),        ("BLD","TopBuild","美国最大住宅隔热安装商"),
+        ("MTH","Meritage Homes","节能住宅建筑商"),
+        ("TMHC","Taylor Morrison","全美大建商"),
+        ("MDC","MDC Holdings","Richmond American Homes母公司"),
+
     ],
     "5G通信": [
         ("QCOM","高通","5G基带/射频芯片霸主"), ("AVGO","博通","RF前端/交换机芯片"),
@@ -616,18 +628,29 @@ SECTOR_STOCKS = {
     "社交媒体": [
         ("META","Meta","Facebook+Instagram+WhatsApp+Threads"), ("SNAP","Snap","Snapchat,AR社交先驱"),
         ("PINS","Pinterest","图片社交/电商发现平台"), ("MTCH","Match Group","Tinder/Hinge在线约会王者"),
-        ("BMBL","Bumble","女性优先约会社交平台"), ("GRND","Grindr","LGBTQ+社交平台"),
+        ("BMBL","Bumble","女性优先约会社交平台"), ("GRND","Grindr","LGBTQ+社交平台"),        ("RDDT","Reddit","美国最大社区论坛平台"),
+        ("DASH","DoorDash","本地配送+社交电商平台"),
+        ("SPOT","Spotify","全球最大音频流媒体+社交发现"),
+        ("TME","腾讯音乐","中国最大在线音乐社交平台"),
+
     ],
     "金矿": [
         ("NEM","纽蒙特","全球最大金矿企业"), ("GOLD","巴里克黄金","全球第二大金矿"),
         ("AEM","Agnico Eagle","加拿大金矿龙头"), ("FNV","Franco-Nevada","黄金权利金公司(不采矿,只收租)"),
-        ("WPM","Wheaton","白银/黄金权利金公司"), ("GFI","Gold Fields","南非金矿巨头"),
+        ("WPM","Wheaton","白银/黄金权利金公司"), ("GFI","Gold Fields","南非金矿巨头"),        ("KGC","Kinross Gold","加拿大大型金矿"),
+        ("AU","AngloGold Ashanti","南非/非洲金矿巨头"),
+        ("RGLD","Royal Gold","黄金权利金+流转协议"),
+        ("HMY","Harmony Gold","南非金矿商"),
+
     ],
     "综合REITs": [
         ("PLD","Prologis","全球最大工业物流REIT"), ("AMT","American Tower","全球最大通信铁塔REIT"),
         ("EQIX","Equinix","全球最大数据中心REIT"), ("SPG","Simon","全球最大购物中心REIT"),
         ("O","Realty Income","净租赁REIT之王(按月派息)"), ("PSA","Public Storage","全球最大自助仓储REIT"),
-        ("WELL","Welltower","医疗养老REIT领导者"),
+        ("WELL","Welltower","医疗养老REIT领导者"),        ("AVB","AvalonBay","高端公寓REIT"),
+        ("EQR","Equity Residential","美国最大公寓REIT"),
+        ("DLR","Digital Realty","全球最大数据中心REIT之二"),
+
     ],
     "存储芯片": [
         ("MU","美光科技","全球DRAM/NAND存储三巨头，HBM3E供不应求"),
@@ -637,7 +660,9 @@ SECTOR_STOCKS = {
         ("PSTG","Pure Storage","全闪存阵列先驱，Evergreen订阅模式"),
         ("SGH","SMART Global","特种内存/CXL/AI存储解决方案"),
         ("RMBL","Rambus","高速内存接口芯片IP授权领导者"),
-        ("FORM","FormFactor","存储芯片探针卡/测试设备龙头"),
+        ("FORM","FormFactor","存储芯片探针卡/测试设备龙头"),        ("HPE","慧与","企业存储/超融合/HPC-AI服务器"),
+        ("SMCI","超微电脑","AI服务器/存储解决方案,营收爆发"),
+
     ],
     "全球半导体": [
         ("TSM","台积电","全球最大晶圆代工厂，先进制程垄断"),
@@ -653,7 +678,9 @@ SECTOR_STOCKS = {
         ("AMAT","应用材料","全球最大半导体设备商，沉积/刻蚀/检测全系列"),
         ("LRCX","泛林研究","刻蚀设备全球龙头"), ("KLAC","科磊","检测量测王者"),
         ("TER","泰瑞达","测试设备+工业机器人"), ("ENTG","英特格","半导体材料/化学品"),
-        ("ONTO","Onto Innovation","先进封装检测设备"), ("ACLS","Axcelis","离子注入设备龙头"),
+        ("ONTO","Onto Innovation","先进封装检测设备"), ("ACLS","Axcelis","离子注入设备龙头"),        ("AMKR","Amkor","全球第二大封测厂"),
+        ("IPGP","IPG Photonics","光纤激光器龙头,芯片制造用激光"),
+
     ],
     "中国互联网": [
         ("BABA","阿里巴巴","中国最大电商+云计算(AliCloud)"),
@@ -668,7 +695,11 @@ SECTOR_STOCKS = {
     "铀/核能": [
         ("CCJ","Cameco","全球最大上市铀矿公司"), ("UEC","Uranium Energy","美国铀矿+ISR技术"),
         ("BWXT","BWX Technologies","核反应堆部件+核燃料"), ("CEG","Constellation Energy","美国最大核电运营商"),
-        ("VST","Vistra","核电+可再生能源+储能"), ("TLN","Talen Energy","核电+数据中心供电"),
+        ("VST","Vistra","核电+可再生能源+储能"), ("TLN","Talen Energy","核电+数据中心供电"),        ("DNN","Denison Mines","加拿大铀矿开发商+ISR"),
+        ("NXE","NexGen Energy","加拿大高品位铀矿"),
+        ("SMR","NuScale Power","小型模块化核反应堆SMR先驱"),
+        ("LEU","Centrus Energy","美国唯一铀浓缩公司,HALEU"),
+
     ],
     "光模块光通信": [
         ("COHR","Coherent","全球光模块龙头，800G/1.6T光器件先驱"),
@@ -678,7 +709,9 @@ SECTOR_STOCKS = {
         ("FN","Fabrinet","光模块OEM代工龙头,NVidia供应商"),
         ("AAOI","Applied Optoelectronics","光模块/光纤接入设备制造商"),
         ("INFN","Infinera","相干光传输设备领导者"),
-        ("HLIT","Harmonic","视频+宽带光纤接入解决方案"),
+        ("HLIT","Harmonic","视频+宽带光纤接入解决方案"),        ("VIAV","Viavi Solutions","光通信测试/网络性能监测"),
+        ("MRVL","美满电子","数据中心光模块DSP/硅光引擎"),
+
     ],
     "AI人工智能": [
         ("NVDA","英伟达","AI训练/推理GPU全球垄断"), ("MSFT","微软","OpenAI合作,Copilot+Azure AI"),
@@ -692,14 +725,16 @@ SECTOR_STOCKS = {
         ("CRSP","CRISPR Therapeutics","基因编辑(CRISPR-Cas9)疗法领导者"),
         ("ROKU","Roku","流媒体电视平台,美国客厅入口"), ("ZM","Zoom","视频会议SaaS先驱"),
         ("SHOP","Shopify","全球电商独立站SaaS龙头"), ("U","Unity","3D游戏引擎+元宇宙基础设施"),
-        ("PATH","UiPath","RPA机器人流程自动化领导者"), ("HOOD","Robinhood","零佣金交易平台,Z世代券商"),
+        ("PATH","UiPath","RPA机器人流程自动化领导者"), ("HOOD","Robinhood","零佣金交易平台,Z世代券商"),        ("ABNB","Airbnb","全球最大民宿共享平台"),
+
     ],
     "机器人AI": [
         ("NVDA","英伟达","机器人AI芯片+Isaac平台"), ("ISRG","直觉外科","达芬奇手术机器人全球装机>8000台"),
         ("TSLA","特斯拉","Optimus人形机器人"), ("TER","泰瑞达","工业机器人+半导体测试设备"),
         ("PATH","UiPath","软件RPA机器人流程自动化"), ("ROK","罗克韦尔","工业自动化+智能制造领导者"),
         ("EMR","艾默生","工业自动化+过程控制全球巨头"), ("ZBRA","斑马技术","仓储/物流机器人+自动识别"),
-        ("CGNX","康耐视","机器视觉/工业读码系统全球领导者"),
+        ("CGNX","康耐视","机器视觉/工业读码系统全球领导者"),        ("AMBA","Ambarella","AI视觉芯片/自动驾驶/机器人感知"),
+
     ],
     # ── 全球市场 ──
     "日本市场": [
