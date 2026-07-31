@@ -2719,8 +2719,9 @@ def _fetch_upcoming_ipos():
 @app.route('/api/market/intel')
 def api_market_intel():
     """Return market events + IPO calendar (cached 4 hours)."""
+    global _market_intel_cache
     now = time.time()
-    if now - _market_intel_cache['ts'] < 14400:  # 4 hours
+    if now - _market_intel_cache['ts'] < 14400:
         return jsonify({"events": _market_intel_cache['events'], "ipos": _market_intel_cache['ipos']})
 
     events = _fetch_market_events()
