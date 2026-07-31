@@ -159,6 +159,7 @@ canvas{max-height:380px}
   <button class="tab" onclick="switchTab('rotation')">🔥 板块轮动</button>
   <button class="tab" onclick="switchTab('correlation')">🔗 相关性矩阵</button>
   <button class="tab" onclick="switchTab('trends')">📈 趋势分析</button>
+  <button class="tab" onclick="switchTab('t0')">📉 做T助手</button>
   <button class="tab" onclick="switchTab('screener')">🎯 智能选股</button>
   <button class="tab" onclick="switchTab('intel')">📰 市场情报</button>
   <button class="tab" onclick="switchTab('quant')">⚙️ 量化交易</button>
@@ -299,6 +300,21 @@ canvas{max-height:380px}
 </div>
 </div>
 
+<!-- ==================== T0 HELPER TAB ==================== -->
+<div id="tab-t0" style="display:none">
+<div class="header"><div><h1>📉 <span>做T助手</span></h1><div class="meta">5分钟K线 | RSI+MACD+布林带+VWAP多信号共振 | 15分钟延迟</div></div></div>
+<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+  <input type="text" id="t0Symbol" placeholder="输入代码如 NVDA, AAPL, SPY..." style="flex:1;min-width:200px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px" onkeydown="if(event.key==='Enter')loadT0()">
+  <button onclick="loadT0()" style="padding:10px 20px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🔍 分析</button>
+  <button onclick="quickT0('NVDA')" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:11px">NVDA</button>
+  <button onclick="quickT0('TSLA')" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:11px">TSLA</button>
+  <button onclick="quickT0('AAPL')" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:11px">AAPL</button>
+  <button onclick="quickT0('SPY')" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:11px">SPY</button>
+  <button onclick="quickT0('QQQ')" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:11px">QQQ</button>
+</div>
+<div id="t0Content"><p style="text-align:center;color:var(--muted);padding:60px">👆 输入美股代码，查看实时做T信号</p></div>
+</div>
+
 <!-- ==================== SCREENER TAB ==================== -->
 <div id="tab-screener" style="display:none">
 <div class="header">
@@ -404,17 +420,19 @@ canvas{max-height:380px}
 // ── Tab Switching ──
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', (tab==='dashboard'&&i===0)||(tab==='bubble'&&i===1)||(tab==='rotation'&&i===2)||(tab==='correlation'&&i===3)||(tab==='trends'&&i===4)||(tab==='screener'&&i===5)||(tab==='intel'&&i===6)||(tab==='quant'&&i===7));
+    t.classList.toggle('active', (tab==='dashboard'&&i===0)||(tab==='bubble'&&i===1)||(tab==='rotation'&&i===2)||(tab==='correlation'&&i===3)||(tab==='trends'&&i===4)||(tab==='t0'&&i===5)||(tab==='screener'&&i===6)||(tab==='intel'&&i===7)||(tab==='quant'&&i===8));
   });
   document.getElementById('tab-dashboard').style.display = tab==='dashboard'?'block':'none';
   document.getElementById('tab-bubble').style.display = tab==='bubble'?'block':'none';
   document.getElementById('tab-rotation').style.display = tab==='rotation'?'block':'none';
   document.getElementById('tab-correlation').style.display = tab==='correlation'?'block':'none';
   document.getElementById('tab-trends').style.display = tab==='trends'?'block':'none';
+  document.getElementById('tab-t0').style.display = tab==='t0'?'block':'none';
   document.getElementById('tab-screener').style.display = tab==='screener'?'block':'none';
   document.getElementById('tab-intel').style.display = tab==='intel'?'block':'none';
   document.getElementById('tab-quant').style.display = tab==='quant'?'block':'none';
   if (tab==='trends') renderTrendsPage();
+  if (tab==='t0') { const s=document.getElementById('t0Symbol'); if(s.value) loadT0(); }
   if (tab==='screener') loadScreener();
   if (tab==='intel') loadIntel();
   if (tab==='quant') loadBacktestHistory();
@@ -604,6 +622,74 @@ function navigateToLatest() {
 }
 
 // ── Smart Stock Screener ──
+// ── T+0 Intraday Signal Assistant ──
+function quickT0(sym) { document.getElementById('t0Symbol').value = sym; loadT0(); }
+
+async function loadT0() {
+  const sym = document.getElementById('t0Symbol').value.trim().toUpperCase();
+  const el = document.getElementById('t0Content');
+  if (!sym) { el.innerHTML = '<p style="text-align:center;color:var(--muted);padding:40px">请输入股票代码</p>'; return; }
+  el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">分析 ' + sym + ' 中...</div></div>';
+
+  try {
+    const resp = await fetch('/api/stock/' + sym + '/t0');
+    const d = await resp.json();
+    if (d.error) { el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">❌ ' + d.error + '</p>'; return; }
+
+    const scoreColor = d.long_score > d.short_score ? 'var(--red)' : d.short_score > d.long_score ? 'var(--green)' : 'var(--muted)';
+
+    let html = '<div style="display:grid;grid-template-columns:280px 1fr;gap:16px">';
+
+    // Left: Signal Summary
+    html += '<div style="background:var(--bg);border-radius:12px;padding:16px;border:3px solid ' + d.action_color + ';text-align:center">';
+    html += '<div style="font-size:12px;color:var(--muted)">' + sym + ' ' + (d.last_price||0) + '</div>';
+    html += '<div style="font-size:14px;color:var(--muted);margin:4px 0">' + (d.last_time||'').slice(11,16) + '</div>';
+    html += '<div style="font-size:28px;font-weight:800;color:' + d.action_color + ';margin:12px 0">' + d.action + '</div>';
+    html += '<div style="display:flex;gap:8px;justify-content:center;margin:8px 0">';
+    html += '<div style="flex:1;background:rgba(34,197,94,0.1);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--muted)">做多信号</div><div style="font-size:20px;font-weight:800;color:var(--red)">' + d.long_score + '</div></div>';
+    html += '<div style="flex:1;background:rgba(239,68,68,0.1);border-radius:8px;padding:8px"><div style="font-size:10px;color:var(--muted)">做空信号</div><div style="font-size:20px;font-weight:800;color:var(--green)">' + d.short_score + '</div></div>';
+    html += '</div>';
+    html += '<div style="font-size:11px;color:var(--muted);margin-top:4px">≥40强烈 | ≥20偏 | <20观望</div></div>';
+
+    // Right: Details
+    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+    // RSI + BB
+    html += '<div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">';
+    html += '<h4 style="font-size:12px;color:var(--accent);margin:0 0 8px 0">📊 RSI(6) · 布林带</h4>';
+    html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">RSI(6)</span><span style="font-size:14px;font-weight:800;color:' + (d.rsi6<25?'var(--green)':d.rsi6>75?'var(--red)':'var(--text)') + '">' + d.rsi6 + '</span></div>';
+    html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">BB上轨</span><span style="font-size:14px;font-weight:700">' + d.bb_upper + '</span></div>';
+    html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">BB下轨</span><span style="font-size:14px;font-weight:700">' + d.bb_lower + '</span></div>';
+    html += '<div style="display:flex;justify-content:space-between"><span style="font-size:11px;color:var(--muted)">BB位置</span><span style="font-size:14px;font-weight:800;color:' + (d.bb_pos<20?'var(--green)':d.bb_pos>80?'var(--red)':'var(--accent)') + '">' + d.bb_pos + '%</span></div>';
+    html += '</div>';
+    // MACD + VWAP + Volume
+    html += '<div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">';
+    html += '<h4 style="font-size:12px;color:var(--accent);margin:0 0 8px 0">📈 MACD · VWAP · 量</h4>';
+    html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">MACD</span><span style="font-size:13px;font-weight:700;color:'+(d.macd_golden_cross?'var(--red)':d.macd_dead_cross?'var(--green)':'var(--muted)')+'">'+(d.macd_golden_cross?'🔺金叉':d.macd_dead_cross?'🔻死叉':'横盘')+'</span></div>';
+    html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">VWAP</span><span style="font-size:14px;font-weight:700">' + d.vwap + '</span></div>';
+    html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">成交量</span><span style="font-size:14px;font-weight:800;color:'+(d.vol_surge>2?'var(--red)':d.vol_surge>1.5?'var(--accent)':'var(--muted)')+'">' + d.vol_surge.toFixed(1) + 'x</span></div>';
+    html += '<div style="display:flex;justify-content:space-between"><span style="font-size:11px;color:var(--muted)">30分钟涨跌</span><span style="font-size:14px;font-weight:700;color:'+(d.price_change_30m>=0?'var(--red)':'var(--green)')+'">' + (d.price_change_30m>=0?'+':'') + d.price_change_30m + '%</span></div>';
+    html += '</div>';
+    // Active signals
+    html += '<div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border);grid-column:1/-1">';
+    html += '<h4 style="font-size:12px;color:var(--accent);margin:0 0 8px 0">🎯 当前触发信号</h4>';
+    if (d.long_signals.length === 0 && d.short_signals.length === 0) {
+      html += '<p style="font-size:11px;color:var(--muted)">无明确信号，建议观望</p>';
+    }
+    if (d.long_signals.length > 0) {
+      html += '<div style="margin-bottom:4px"><span style="color:var(--red);font-weight:600">做多信号：</span>' + d.long_signals.map(s=>'<span style="background:rgba(34,197,94,0.12);padding:2px 8px;border-radius:4px;font-size:11px;margin:2px">' + s.name + ' +' + s.score + '</span>').join(' ') + '</div>';
+    }
+    if (d.short_signals.length > 0) {
+      html += '<div><span style="color:var(--green);font-weight:600">做空信号：</span>' + d.short_signals.map(s=>'<span style="background:rgba(239,68,68,0.12);padding:2px 8px;border-radius:4px;font-size:11px;margin:2px">' + s.name + ' +' + s.score + '</span>').join(' ') + '</div>';
+    }
+    html += '</div>';
+    html += '</div></div>';
+    html += '<p style="font-size:10px;color:var(--muted);text-align:center;margin-top:8px">⚠️ 5分钟K线 | 数据延迟约15分钟 | 信号仅供参考，不构成投资建议 | 多信号共振(≥20)再做决策</p>';
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">❌ 网络错误: ' + e.message + '</p>';
+  }
+}
+
 async function loadScreener() {
   const el = document.getElementById('screenerContent');
   el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">扫描' + (market === 'cn' ? 'A股' : '美股') + '龙头股中...</div></div>';

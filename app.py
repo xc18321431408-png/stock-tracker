@@ -2381,6 +2381,111 @@ def api_stock_history(symbol):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/stock/<symbol>/t0')
+def api_t0_signals(symbol):
+    """Return T+0 intraday signals: RSI(6), MACD 5-min, Bollinger Bands, VWAP."""
+    try:
+        sym = symbol.upper()
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=5m&range=5d"
+        resp = requests.get(url, headers=YF_HEADERS, timeout=12)
+        if resp.status_code != 200: return jsonify({"error": "fetch failed"}), 500
+        data = resp.json()
+        r = data.get('chart',{}).get('result',[None])[0]
+        if not r: return jsonify({"error": "no data"}), 500
+        quotes = r.get('indicators',{}).get('quote',[{}])[0]
+        closes = [c for c in quotes.get('close',[]) if c is not None]
+        opens = quotes.get('open',[]); highs = quotes.get('high',[]); lows = quotes.get('low',[])
+        volumes = quotes.get('volume',[]); timestamps = r.get('timestamp',[])
+        n = len(closes)
+        if n < 30: return jsonify({"error": f"insufficient bars: {n}"}), 500
+
+        # RSI(6)
+        gains, losses = [], []
+        for i in range(1, n): d=closes[i]-closes[i-1]; gains.append(max(d,0)); losses.append(max(-d,0))
+        avg_g = sum(gains[-6:])/6; avg_l = sum(losses[-6:])/6
+        rs = avg_g/avg_l if avg_l>0 else 100
+        rsi6 = round(100-100/(1+rs), 1)
+
+        # MACD(12,26,9) on 5-min bars
+        def ema(d,p): k=2/(p+1); r=[d[0]]; [r.append(d[i]*k+r[-1]*(1-k)) for i in range(1,len(d))]; return r
+        e12=ema(closes,12); e26=ema(closes,26)
+        macd=[e12[i]-e26[i] for i in range(n)]; sig=ema(macd,9)
+        hist=[macd[i]-sig[i] for i in range(n)]
+        macd_now, sig_now, hist_now = macd[-1], sig[-1], hist[-1]
+        macd_prev, sig_prev = macd[-2], sig[-2]
+        golden_cross = macd_prev <= sig_prev and macd_now > sig_now
+        dead_cross = macd_prev >= sig_prev and macd_now < sig_now
+
+        # Bollinger Bands(20,2)
+        bb20 = closes[-20:]; ma20 = sum(bb20)/20
+        std20 = (sum((x-ma20)**2 for x in bb20)/20)**0.5
+        bb_upper = round(ma20+2*std20, 2); bb_lower = round(ma20-2*std20, 2)
+        bb_pos = round((closes[-1]-bb_lower)/(bb_upper-bb_lower)*100, 1) if (bb_upper-bb_lower)>0 else 50
+        touch_lower = closes[-1] <= bb_lower * 1.002
+        touch_upper = closes[-1] >= bb_upper * 0.998
+
+        # VWAP (today's volume-weighted avg price)
+        today_cutoff = max(0, n-78)  # ~6.5 hours of 5-min bars
+        today_closes = closes[today_cutoff:]; today_vols = volumes[today_cutoff:] if len(volumes)>=n else [0]*len(today_closes)
+        vwap_num = sum(today_closes[i]*(today_vols[i] or 0) for i in range(len(today_closes)))
+        vwap_den = sum(v or 0 for v in today_vols)
+        vwap = round(vwap_num/vwap_den, 2) if vwap_den>0 else closes[-1]
+
+        # Volume analysis
+        vol_last = volumes[-1] or 0
+        vol_avg_10 = sum(v or 0 for v in volumes[-11:-1])/10 if len(volumes)>=11 else vol_last
+        vol_surge = round(vol_last/vol_avg_10, 2) if vol_avg_10>0 else 1.0
+
+        # Price action
+        price_change = round((closes[-1]-closes[-6])/closes[-6]*100, 2) if len(closes)>=6 and closes[-6]>0 else 0
+        high_1d = max(closes[-78:]) if len(closes)>=78 else max(closes)
+        low_1d = min(closes[-78:]) if len(closes)>=78 else min(closes)
+
+        # ── Signal Strength ──
+        long_signals = []; short_signals = []
+        if rsi6 < 25: long_signals.append(("RSI超卖", 30))
+        elif rsi6 < 35: long_signals.append(("RSI偏弱", 15))
+        if rsi6 > 75: short_signals.append(("RSI超买", 30))
+        elif rsi6 > 65: short_signals.append(("RSI偏强", 15))
+        if touch_lower: long_signals.append(("布林下轨", 25))
+        if touch_upper: short_signals.append(("布林上轨", 25))
+        if bb_pos < 20: long_signals.append(("BB低位", 15))
+        if bb_pos > 80: short_signals.append(("BB高位", 15))
+        if golden_cross: long_signals.append(("MACD金叉", 20))
+        if dead_cross: short_signals.append(("MACD死叉", 20))
+        if closes[-1] < vwap: long_signals.append(("低于VWAP", 10))
+        if closes[-1] > vwap: short_signals.append(("高于VWAP", 10))
+        if vol_surge > 2 and price_change > 0: long_signals.append(("放量拉升", 15))
+        if vol_surge > 2 and price_change < 0: short_signals.append(("放量杀跌", 15))
+
+        long_score = sum(s[1] for s in long_signals)
+        short_score = sum(s[1] for s in short_signals)
+        net_score = long_score - short_score
+
+        if net_score >= 40: action = "🟢 强烈做多"; color = "#22c55e"
+        elif net_score >= 20: action = "🟡 偏多做T"; color = "#f59e0b"
+        elif net_score <= -40: action = "🔴 强烈做空"; color = "#ef4444"
+        elif net_score <= -20: action = "🟠 偏空做T"; color = "#f97316"
+        else: action = "⚪ 观望"; color = "#94a3b8"
+
+        from datetime import datetime
+        last_ts = datetime.fromtimestamp(timestamps[-1]) if timestamps else datetime.now()
+
+        return jsonify({
+            "symbol": sym, "last_price": closes[-1], "last_time": last_ts.isoformat(),
+            "rsi6": rsi6, "macd_golden_cross": golden_cross, "macd_dead_cross": dead_cross,
+            "bb_lower": bb_lower, "bb_upper": bb_upper, "bb_pos": bb_pos,
+            "touch_lower": touch_lower, "touch_upper": touch_upper,
+            "vwap": vwap, "vol_surge": vol_surge, "price_change_30m": price_change,
+            "day_high": high_1d, "day_low": low_1d,
+            "long_signals": [{"name": s[0], "score": s[1]} for s in long_signals],
+            "short_signals": [{"name": s[0], "score": s[1]} for s in short_signals],
+            "long_score": long_score, "short_score": short_score,
+            "action": action, "action_color": color,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/stock/<symbol>/technicals')
 def api_stock_technicals(symbol):
     """Return comprehensive technical + quant indicators (refreshes on 1st of each month)."""
