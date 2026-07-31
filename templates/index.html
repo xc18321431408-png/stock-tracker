@@ -305,7 +305,8 @@ canvas{max-height:380px}
 <div class="header"><div><h1>📉 <span>做T助手</span></h1><div class="meta">5分钟K线 | RSI+MACD+布林带+VWAP多信号共振 | 15分钟延迟</div></div></div>
 <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
   <input type="text" id="t0Symbol" placeholder="输入代码如 NVDA, AAPL, SPY..." style="flex:1;min-width:200px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px" onkeydown="if(event.key==='Enter')loadT0()">
-  <button onclick="loadT0()" style="padding:10px 20px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🔍 分析</button>
+  <button id="t0AnalyzeBtn" onclick="loadT0()" style="padding:10px 20px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🔍 分析</button>
+  <button id="t0RefreshBtn" onclick="refreshT0()" style="padding:10px 16px;background:var(--card);border:1px solid var(--accent);color:var(--accent);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🔄 刷新数据</button>
   <button onclick="quickT0('NVDA')" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:11px">NVDA</button>
   <button onclick="quickT0('TSLA')" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:11px">TSLA</button>
   <button onclick="quickT0('AAPL')" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:11px">AAPL</button>
@@ -625,6 +626,20 @@ function navigateToLatest() {
 // ── T+0 Intraday Signal Assistant ──
 function quickT0(sym) { document.getElementById('t0Symbol').value = sym; loadT0(); }
 
+function refreshT0() {
+  const btn = document.getElementById('t0RefreshBtn');
+  const orig = btn.textContent;
+  btn.textContent = '⏳ 刷新中...'; btn.disabled = true;
+  loadT0().then(() => {
+    const now = new Date().toLocaleTimeString('zh-CN');
+    btn.textContent = '✅ 已刷新 ' + now; btn.style.background = 'rgba(34,197,94,0.15)'; btn.style.borderColor = 'var(--green)'; btn.style.color = 'var(--green)';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; btn.style.borderColor = 'var(--accent)'; btn.style.color = 'var(--accent)'; btn.disabled = false; }, 3000);
+  }).catch(e => {
+    btn.textContent = '❌ 失败，点此重试'; btn.style.background = 'rgba(239,68,68,0.15)'; btn.style.borderColor = 'var(--red)'; btn.style.color = 'var(--red)';
+    btn.disabled = false;
+  });
+}
+
 async function loadT0() {
   const sym = document.getElementById('t0Symbol').value.trim().toUpperCase();
   const el = document.getElementById('t0Content');
@@ -634,7 +649,7 @@ async function loadT0() {
   try {
     const resp = await fetch('/api/stock/' + sym + '/t0');
     const d = await resp.json();
-    if (d.error) { el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">❌ ' + d.error + '</p>'; return; }
+    if (d.error) { el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">❌ ' + d.error + '</p>'; throw new Error(d.error); }
 
     const scoreColor = d.long_score > d.short_score ? 'var(--red)' : d.short_score > d.long_score ? 'var(--green)' : 'var(--muted)';
 
@@ -683,7 +698,7 @@ async function loadT0() {
     }
     html += '</div>';
     html += '</div></div>';
-    html += '<p style="font-size:10px;color:var(--muted);text-align:center;margin-top:8px">⚠️ 5分钟K线 | 数据延迟约15分钟 | 信号仅供参考，不构成投资建议 | 多信号共振(≥20)再做决策</p>';
+    html += '<p style="font-size:10px;color:var(--muted);text-align:center;margin-top:8px">🕐 数据时间：' + (d.last_time||'') + ' | 点「🔄 刷新数据」实时更新 | ⚠️ 信号仅供参考 | 多信号共振(≥20)再做决策</p>';
     el.innerHTML = html;
   } catch(e) {
     el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">❌ 网络错误: ' + e.message + '</p>';
