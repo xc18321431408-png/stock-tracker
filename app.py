@@ -1876,6 +1876,155 @@ def _refresh_monthly_reports():
         _technicals_cache.clear()
     print(f"[Report] Cleared {count} cached reports for monthly refresh")
 
+# ── Smart Stock Screener ──
+_screener_cache = {'ts': 0, 'results': []}
+
+def _quick_score_stock(symbol, name, sector, closes, vols=None):
+    """Score on: low RSI + high Sharpe + MACD uptrend + volume expansion + BB proximity."""
+    n = len(closes)
+    if n < 60: return None
+
+    # Daily returns
+    rets = [(closes[i]-closes[i-1])/closes[i-1]*100 for i in range(1,n) if closes[i-1]>0]
+    if len(rets) < 50: return None
+    m = len(rets)
+
+    # RSI(14)
+    gains, losses = [], []
+    for i in range(1, len(closes)):
+        d = closes[i]-closes[i-1]; gains.append(max(d,0)); losses.append(max(-d,0))
+    avg_g = sum(gains[-14:])/14; avg_l = sum(losses[-14:])/14
+    rs = avg_g/avg_l if avg_l>0 else 100
+    rsi = round(100-100/(1+rs), 1)
+
+    # Sharpe proxy (annualized)
+    mu_d = sum(rets)/m; sigma_d = (sum((r-mu_d)**2 for r in rets)/m)**0.5
+    sharpe = round((mu_d*252 - 4.0)/(sigma_d*(252**0.5)), 2) if sigma_d>0 else 0
+
+    # MACD(12,26,9)
+    def ema(data, period):
+        k=2/(period+1); r=[data[0]]
+        for i in range(1,len(data)): r.append(data[i]*k+r[-1]*(1-k))
+        return r
+    e12=ema(closes,12); e26=ema(closes,26)
+    macd=[e12[i]-e26[i] for i in range(n)]
+    sig=ema(macd,9)
+    hist=[macd[i]-sig[i] for i in range(n)]
+
+    macd_now = macd[-1]; sig_now = sig[-1]; hist_now = hist[-1]
+    macd_uptrend = macd_now > sig_now and hist_now > 0
+    # Check if MACD is at extreme highs
+    hist_max = max(abs(h) for h in hist[-60:]) if len(hist)>=60 else max(abs(h) for h in hist)
+    macd_extreme = abs(hist_now) > hist_max * 0.9 if hist_max > 0 else False
+
+    # Scoring
+    score = 0
+    # RSI: lower is better for buying opportunity
+    if rsi < 30: score += 30
+    elif rsi < 40: score += 20
+    elif rsi < 50: score += 10
+
+    # Sharpe: higher is better
+    if sharpe > 2.0: score += 30
+    elif sharpe > 1.0: score += 20
+    elif sharpe > 0.5: score += 10
+    elif sharpe < 0: score -= 10
+
+    # MACD: uptrend + not extreme
+    if macd_uptrend and not macd_extreme: score += 20
+    elif macd_uptrend: score += 10
+
+    # Volume expansion: current vol vs 20-day avg
+    vol_exp = 1.0
+    if vols and len(vols) >= 20:
+        vol_20_avg = sum(v or 0 for v in vols[-21:-1]) / 20 if len(vols) >= 21 else 0
+        vol_now = vols[-1] or 0
+        if vol_20_avg > 0:
+            vol_exp = round(vol_now / vol_20_avg, 2)
+
+    # Bollinger Band position
+    bb_lower = None; bb_mid = None; bb_pos_pct = None
+    if n >= 20:
+        w = closes[-20:]
+        ma20 = sum(w)/20; std20 = (sum((x-ma20)**2 for x in w)/20)**0.5
+        bb_lower = round(ma20 - 2*std20, 2)
+        bb_mid = round(ma20, 2)
+        if (2*std20) > 0:
+            bb_pos_pct = round((closes[-1] - bb_lower) / (2*std20) * 100, 1)
+            # Clamp to 0-100 range for display
+            bb_pos_pct = max(0, min(100, bb_pos_pct))
+
+    # Volume expansion scoring
+    if vol_exp > 2.0: score += 20      # 2x+ avg volume → strong interest
+    elif vol_exp > 1.5: score += 15    # 50%+ above avg → notable
+    elif vol_exp > 1.2: score += 10    # slightly elevated
+
+    # BB lower band proximity scoring
+    if bb_pos_pct is not None:
+        if bb_pos_pct < 10: score += 25       # price near/at lower band → oversold bounce
+        elif bb_pos_pct < 20: score += 15     # approaching lower band
+        elif bb_pos_pct < 30: score += 10     # in lower third
+
+    return {
+        'symbol': symbol, 'name': name, 'sector': sector,
+        'rsi': rsi, 'sharpe': sharpe,
+        'macd_uptrend': macd_uptrend, 'macd_extreme': macd_extreme,
+        'macd_hist': round(hist_now, 6),
+        'vol_exp': vol_exp, 'bb_pos_pct': bb_pos_pct,
+        'score': score, 'close': round(closes[-1], 2)
+    }
+
+def _run_screener():
+    """Scan all US sector stocks and return top picks."""
+    results = []
+    symbols_processed = set()
+
+    for sector_name, stocks in SECTOR_STOCKS.items():
+        for info in stocks[:3]:  # top 3 per sector
+            sym = info[0]; name = info[1]
+            if sym in symbols_processed: continue
+            symbols_processed.add(sym)
+            try:
+                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=6mo"
+                resp = requests.get(url, headers=YF_HEADERS, timeout=10)
+                if resp.status_code != 200: continue
+                data = resp.json()
+                r = data.get('chart',{}).get('result',[None])[0]
+                if not r: continue
+                quotes = r.get('indicators',{}).get('quote',[{}])[0]
+                closes = [c for c in quotes.get('close',[]) if c is not None]
+                vols = quotes.get('volume', [])
+                if len(closes) < 60: continue
+
+                scored = _quick_score_stock(sym, name, sector_name, closes, vols)
+                if scored: results.append(scored)
+                time.sleep(0.1)
+            except: continue
+
+    # Filter: low RSI + good Sharpe + MACD uptrend
+    filtered = [r for r in results if r['rsi'] < 55 and r['sharpe'] > 0 and r['macd_uptrend']]
+    filtered.sort(key=lambda x: x['score'], reverse=True)
+    return filtered[:25]
+
+@app.route('/api/screener/us')
+def api_screener():
+    """Return top stock picks: low RSI + high Sharpe + MACD uptrend (cached 1 day)."""
+    global _screener_cache
+    now = time.time()
+    if now - _screener_cache['ts'] < 86400:
+        return jsonify({"results": _screener_cache['results'], "updated": datetime.fromtimestamp(_screener_cache['ts']).isoformat()})
+
+    results = _run_screener()
+    _screener_cache = {'ts': now, 'results': results}
+    return jsonify({"results": results, "updated": datetime.now().isoformat()})
+
+def _refresh_screener():
+    """Daily refresh of stock screener cache."""
+    print("[Screener] Refreshing...")
+    global _screener_cache
+    _screener_cache = {'ts': time.time(), 'results': _run_screener()}
+    print(f"[Screener] Done: {len(_screener_cache['results'])} picks")
+
 _last_fetch_time = {'us': None, 'cn': None, 'kol': None}
 
 scheduler = BackgroundScheduler(timezone='Asia/Shanghai')

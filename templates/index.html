@@ -159,6 +159,7 @@ canvas{max-height:380px}
   <button class="tab" onclick="switchTab('rotation')">🔥 板块轮动</button>
   <button class="tab" onclick="switchTab('correlation')">🔗 相关性矩阵</button>
   <button class="tab" onclick="switchTab('trends')">📈 趋势分析</button>
+  <button class="tab" onclick="switchTab('screener')">🎯 智能选股</button>
   <button class="tab" onclick="switchTab('intel')">📰 市场情报</button>
   <button class="tab" onclick="switchTab('quant')">⚙️ 量化交易</button>
 </div>
@@ -298,6 +299,17 @@ canvas{max-height:380px}
 </div>
 </div>
 
+<!-- ==================== SCREENER TAB ==================== -->
+<div id="tab-screener" style="display:none">
+<div class="header">
+  <div>
+    <h1>🎯 <span>智能选股</span></h1>
+    <div class="meta">低RSI + 高夏普 + MACD上升 + 放量 + 布林带下轨 | 每日自动更新</div>
+  </div>
+</div>
+<div id="screenerContent"><div class="loading-spinner"><div class="spinner"></div></div></div>
+</div>
+
 <!-- ==================== MARKET INTEL TAB ==================== -->
 <div id="tab-intel" style="display:none">
 <div class="header">
@@ -392,16 +404,18 @@ canvas{max-height:380px}
 // ── Tab Switching ──
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', (tab==='dashboard'&&i===0)||(tab==='bubble'&&i===1)||(tab==='rotation'&&i===2)||(tab==='correlation'&&i===3)||(tab==='trends'&&i===4)||(tab==='intel'&&i===5)||(tab==='quant'&&i===6));
+    t.classList.toggle('active', (tab==='dashboard'&&i===0)||(tab==='bubble'&&i===1)||(tab==='rotation'&&i===2)||(tab==='correlation'&&i===3)||(tab==='trends'&&i===4)||(tab==='screener'&&i===5)||(tab==='intel'&&i===6)||(tab==='quant'&&i===7));
   });
   document.getElementById('tab-dashboard').style.display = tab==='dashboard'?'block':'none';
   document.getElementById('tab-bubble').style.display = tab==='bubble'?'block':'none';
   document.getElementById('tab-rotation').style.display = tab==='rotation'?'block':'none';
   document.getElementById('tab-correlation').style.display = tab==='correlation'?'block':'none';
   document.getElementById('tab-trends').style.display = tab==='trends'?'block':'none';
+  document.getElementById('tab-screener').style.display = tab==='screener'?'block':'none';
   document.getElementById('tab-intel').style.display = tab==='intel'?'block':'none';
   document.getElementById('tab-quant').style.display = tab==='quant'?'block':'none';
   if (tab==='trends') renderTrendsPage();
+  if (tab==='screener') loadScreener();
   if (tab==='intel') loadIntel();
   if (tab==='quant') loadBacktestHistory();
   if (tab==='bubble') renderBubbleChart();
@@ -587,6 +601,50 @@ function navigateToLatest() {
   currentDateIdx = -1;
   updateDateNavUI();
   loadDashboard();
+}
+
+// ── Smart Stock Screener ──
+async function loadScreener() {
+  const el = document.getElementById('screenerContent');
+  el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">扫描' + (market === 'cn' ? 'A股' : '美股') + '龙头股中...</div></div>';
+  try {
+    const resp = await fetch('/api/screener/us');
+    const data = await resp.json();
+    const results = data.results || [];
+    if (!results.length) { el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px">暂无符合条件的股票，请稍后再试</p>'; return; }
+
+    let html = '<p style="font-size:11px;color:var(--muted);margin-bottom:12px">📅 更新时间：' + (data.updated||'').slice(0,16) + ' | 每日自动刷新 | 筛选逻辑：低RSI(超卖) + 高夏普(高效) + MACD上升 + 放量 + 布林带下轨附近</p>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px">';
+
+    for (const r of results) {
+      const rsiColor = r.rsi < 30 ? 'var(--green)' : r.rsi < 40 ? 'var(--accent)' : 'var(--gold)';
+      const sharpeColor = r.sharpe > 2 ? 'var(--red)' : r.sharpe > 1 ? 'var(--accent)' : 'var(--text)';
+      const volColor = r.vol_exp > 1.5 ? 'var(--red)' : r.vol_exp > 1.2 ? 'var(--accent)' : 'var(--muted)';
+      const bbIcon = r.bb_pos_pct != null && r.bb_pos_pct < 15 ? '🔴' : r.bb_pos_pct < 25 ? '🟡' : '⚪';
+
+      html += '<div style="background:var(--bg);border-radius:10px;padding:12px 14px;border:1px solid var(--border);border-left:4px solid ' + rsiColor + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
+        '<span style="font-weight:700;font-size:14px;color:var(--accent)">' + r.symbol + '</span>' +
+        '<span style="font-size:11px;color:var(--muted)">' + r.sector + '</span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--text);margin-bottom:8px">' + r.name + ' | 💲' + r.close + '</div>' +
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px">' +
+        '<div style="text-align:center;background:rgba(0,0,0,0.15);border-radius:6px;padding:6px"><div style="color:var(--muted)">RSI</div><div style="font-weight:700;font-size:16px;color:' + rsiColor + '">' + r.rsi + '</div></div>' +
+        '<div style="text-align:center;background:rgba(0,0,0,0.15);border-radius:6px;padding:6px"><div style="color:var(--muted)">夏普</div><div style="font-weight:700;font-size:16px;color:' + sharpeColor + '">' + r.sharpe + '</div></div>' +
+        '<div style="text-align:center;background:rgba(0,0,0,0.15);border-radius:6px;padding:6px"><div style="color:var(--muted)">放量</div><div style="font-weight:700;font-size:16px;color:' + volColor + '">' + (r.vol_exp||0).toFixed(1) + 'x</div></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:8px;margin-top:6px;font-size:11px;align-items:center">' +
+        '<span style="color:var(--muted)">MACD:</span><span style="color:' + (r.macd_uptrend?'var(--red)':'var(--green)') + '">' + (r.macd_uptrend?'📈 上升通道':'📉') + '</span>' +
+        '<span style="color:var(--muted);margin-left:4px">BB:</span><span>' + bbIcon + ' ' + (r.bb_pos_pct||'?') + '%</span>' +
+        '<span style="margin-left:auto;font-weight:700;font-size:14px;color:var(--gold)">⭐' + r.score + '</span>' +
+        '</div>' +
+        '</div>';
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">加载失败: ' + e.message + '</p>';
+  }
 }
 
 // ── Market Intelligence ──
