@@ -709,7 +709,7 @@ async function loadScreener() {
   const el = document.getElementById('screenerContent');
   el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">扫描' + (market === 'cn' ? 'A股' : '美股') + '龙头股中...</div></div>';
   try {
-    const resp = await fetch('/api/screener/us');
+    const resp = await fetch(apiBase('/screener/us'));
     const data = await resp.json();
     const results = data.results || [];
     if (!results.length) { el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px">暂无符合条件的股票，请稍后再试</p>'; return; }

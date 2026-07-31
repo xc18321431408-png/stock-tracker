@@ -1974,13 +1974,14 @@ def _quick_score_stock(symbol, name, sector, closes, vols=None):
         'score': score, 'close': round(closes[-1], 2)
     }
 
-def _run_screener():
-    """Scan all US sector stocks and return top picks."""
+def _run_screener(market='us'):
+    """Scan sector stocks and return top picks."""
     results = []
     symbols_processed = set()
+    sectors = SECTOR_STOCKS if market != 'cn' else CN_SECTOR_STOCKS
 
-    for sector_name, stocks in SECTOR_STOCKS.items():
-        for info in stocks[:3]:  # top 3 per sector
+    for sector_name, stocks in sectors.items():
+        for info in stocks[:3]:
             sym = info[0]; name = info[1]
             if sym in symbols_processed: continue
             symbols_processed.add(sym)
@@ -1995,35 +1996,43 @@ def _run_screener():
                 closes = [c for c in quotes.get('close',[]) if c is not None]
                 vols = quotes.get('volume', [])
                 if len(closes) < 60: continue
-
                 scored = _quick_score_stock(sym, name, sector_name, closes, vols)
                 if scored: results.append(scored)
                 time.sleep(0.1)
             except: continue
 
-    # Filter: low RSI + good Sharpe + MACD uptrend
     filtered = [r for r in results if r['rsi'] < 55 and r['sharpe'] > 0 and r['macd_uptrend']]
     filtered.sort(key=lambda x: x['score'], reverse=True)
     return filtered[:25]
 
+_screener_cache_cn = {'ts': 0, 'results': []}
+
 @app.route('/api/screener/us')
 def api_screener():
-    """Return top stock picks: low RSI + high Sharpe + MACD uptrend (cached 1 day)."""
     global _screener_cache
     now = time.time()
     if now - _screener_cache['ts'] < 86400:
         return jsonify({"results": _screener_cache['results'], "updated": datetime.fromtimestamp(_screener_cache['ts']).isoformat()})
-
-    results = _run_screener()
+    results = _run_screener('us')
     _screener_cache = {'ts': now, 'results': results}
     return jsonify({"results": results, "updated": datetime.now().isoformat()})
 
+@app.route('/api/cn/screener/us')
+def api_cn_screener():
+    global _screener_cache_cn
+    now = time.time()
+    if now - _screener_cache_cn['ts'] < 86400:
+        return jsonify({"results": _screener_cache_cn['results'], "updated": datetime.fromtimestamp(_screener_cache_cn['ts']).isoformat()})
+    results = _run_screener('cn')
+    _screener_cache_cn = {'ts': now, 'results': results}
+    return jsonify({"results": results, "updated": datetime.now().isoformat()})
+
 def _refresh_screener():
-    """Daily refresh of stock screener cache."""
+    global _screener_cache, _screener_cache_cn
     print("[Screener] Refreshing...")
-    global _screener_cache
-    _screener_cache = {'ts': time.time(), 'results': _run_screener()}
-    print(f"[Screener] Done: {len(_screener_cache['results'])} picks")
+    _screener_cache = {'ts': time.time(), 'results': _run_screener('us')}
+    _screener_cache_cn = {'ts': time.time(), 'results': _run_screener('cn')}
+    print(f"[Screener] Done: {len(_screener_cache['results'])} US + {len(_screener_cache_cn['results'])} CN")
 
 _last_fetch_time = {'us': None, 'cn': None, 'kol': None}
 
