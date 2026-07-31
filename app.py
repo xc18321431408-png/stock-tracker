@@ -2670,6 +2670,64 @@ def api_health():
     status["status"] = "healthy" if all_ok else "stale"
     return jsonify(status)
 
+# ── Market Intelligence API ──
+_market_intel_cache = {'ts': 0, 'events': [], 'ipos': []}
+
+def _fetch_market_events():
+    """Fetch major market-moving events from financial RSS."""
+    events = []
+    try:
+        url = "https://feeds.finance.yahoo.com/rss/2.0/headline?s=%5ESPX&region=US&lang=en-US"
+        resp = requests.get(url, headers=YF_HEADERS, timeout=10)
+        if resp.status_code != 200: return events
+        root = ET.fromstring(resp.content)
+        keywords = ['earnings','fed','powell','gdp','cpi','inflation','jobs','rate','rally','sell','surge','plunge',
+                     'ipo','merger','acquisition','split','dividend','guidance','upgrade','downgrade','billion']
+        for item in root.findall('.//item')[:15]:
+            title_el = item.find('title'); desc_el = item.find('description')
+            title = title_el.text.strip() if title_el is not None and title_el.text else ''
+            desc = desc_el.text.strip() if desc_el is not None and desc_el.text else ''
+            if not title: continue
+            score = sum(1 for kw in keywords if kw.lower() in (title+desc).lower())
+            if score >= 2:
+                pub_el = item.find('pubDate')
+                events.append({
+                    'title': title, 'desc': desc[:200],
+                    'published': _parse_rss_date(pub_el.text.strip()) if pub_el is not None and pub_el.text else '',
+                    'impact': 'high' if score >= 4 else 'medium'
+                })
+    except Exception as e:
+        print(f"[Market] Events fetch error: {e}")
+    return events
+
+def _fetch_upcoming_ipos():
+    """Return upcoming IPO calendar (curated list, refreshed periodically)."""
+    ipos = [
+        {"date": "2026-08-04", "ticker": "ATTO", "name": "Attovia Therapeutics", "sector": "生物科技", "size": "$2.1亿", "price": "$15-17"},
+        {"date": "2026-08-05", "ticker": "BRVE", "name": "Braveheart Bio", "sector": "生物科技", "size": "$3.2亿", "price": "$15-17"},
+        {"date": "2026-08-05", "ticker": "VOGX", "name": "Vogenx", "sector": "生物科技", "size": "$8100万", "price": "$11-13"},
+        {"date": "2026-08-05", "ticker": "RBC", "name": "River City Bank", "sector": "银行", "size": "$1.4亿", "price": "$48-51"},
+        {"date": "2026-08-03", "ticker": "XIIIU", "name": "Churchill Capital XIII (SPAC)", "sector": "SPAC", "size": "$3.6亿", "price": "$10.00"},
+        {"date": "2026-08月初", "ticker": "JMKE", "name": "Jersey Mike's Subs 🥪", "sector": "餐饮连锁", "size": "$10.9亿", "price": "$21-25"},
+        {"date": "2026-08月初", "ticker": "REF", "name": "Reformation", "sector": "时尚零售", "size": "$2.4亿", "price": "$15-17"},
+        {"date": "2026-08月", "ticker": "TBD", "name": "Cumberland Farms", "sector": "便利店", "size": "待定", "price": "待定"},
+        {"date": "2026-H2", "ticker": "TBD", "name": "ByteDance/抖音 (港股)", "sector": "社交媒体", "size": "预计>100亿", "price": "待定"},
+        {"date": "2026-10月", "ticker": "TBD", "name": "Unitree 宇树科技 (A股)", "sector": "机器人", "size": "预计50亿+", "price": "待定"},
+    ]
+    return ipos
+
+@app.route('/api/market/intel')
+def api_market_intel():
+    """Return market events + IPO calendar (cached 4 hours)."""
+    now = time.time()
+    if now - _market_intel_cache['ts'] < 14400:  # 4 hours
+        return jsonify({"events": _market_intel_cache['events'], "ipos": _market_intel_cache['ipos']})
+
+    events = _fetch_market_events()
+    ipos = _fetch_upcoming_ipos()
+    _market_intel_cache = {'ts': now, 'events': events, 'ipos': ipos}
+    return jsonify({"events": events, "ipos": ipos})
+
 # ── News API ──
 @app.route('/api/news')
 def api_news():

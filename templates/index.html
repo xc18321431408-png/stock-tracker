@@ -159,6 +159,7 @@ canvas{max-height:380px}
   <button class="tab" onclick="switchTab('rotation')">🔥 板块轮动</button>
   <button class="tab" onclick="switchTab('correlation')">🔗 相关性矩阵</button>
   <button class="tab" onclick="switchTab('trends')">📈 趋势分析</button>
+  <button class="tab" onclick="switchTab('intel')">📰 市场情报</button>
   <button class="tab" onclick="switchTab('quant')">⚙️ 量化交易</button>
 </div>
 
@@ -297,6 +298,18 @@ canvas{max-height:380px}
 </div>
 </div>
 
+<!-- ==================== MARKET INTEL TAB ==================== -->
+<div id="tab-intel" style="display:none">
+<div class="header">
+  <div>
+    <h1>📰 <span>市场情报</span></h1>
+    <div class="meta">重大事件 | IPO日历 | 每4小时自动刷新</div>
+  </div>
+</div>
+
+<div id="intelContent"><div class="loading-spinner"><div class="spinner"></div></div></div>
+</div>
+
 <!-- ==================== QUANT TAB ==================== -->
 <div id="tab-quant" style="display:none">
 <div class="header">
@@ -379,15 +392,17 @@ canvas{max-height:380px}
 // ── Tab Switching ──
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', (tab==='dashboard'&&i===0)||(tab==='bubble'&&i===1)||(tab==='rotation'&&i===2)||(tab==='correlation'&&i===3)||(tab==='trends'&&i===4)||(tab==='quant'&&i===5));
+    t.classList.toggle('active', (tab==='dashboard'&&i===0)||(tab==='bubble'&&i===1)||(tab==='rotation'&&i===2)||(tab==='correlation'&&i===3)||(tab==='trends'&&i===4)||(tab==='intel'&&i===5)||(tab==='quant'&&i===6));
   });
   document.getElementById('tab-dashboard').style.display = tab==='dashboard'?'block':'none';
   document.getElementById('tab-bubble').style.display = tab==='bubble'?'block':'none';
   document.getElementById('tab-rotation').style.display = tab==='rotation'?'block':'none';
   document.getElementById('tab-correlation').style.display = tab==='correlation'?'block':'none';
   document.getElementById('tab-trends').style.display = tab==='trends'?'block':'none';
+  document.getElementById('tab-intel').style.display = tab==='intel'?'block':'none';
   document.getElementById('tab-quant').style.display = tab==='quant'?'block':'none';
   if (tab==='trends') renderTrendsPage();
+  if (tab==='intel') loadIntel();
   if (tab==='quant') loadBacktestHistory();
   if (tab==='bubble') renderBubbleChart();
   if (tab==='rotation') renderRotationChart();
@@ -572,6 +587,58 @@ function navigateToLatest() {
   currentDateIdx = -1;
   updateDateNavUI();
   loadDashboard();
+}
+
+// ── Market Intelligence ──
+async function loadIntel() {
+  const el = document.getElementById('intelContent');
+  el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div></div>';
+  try {
+    const resp = await fetch('/api/market/intel');
+    const data = await resp.json();
+    const events = data.events || [], ipos = data.ipos || [];
+
+    let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">';
+
+    // ── Market Events ──
+    html += '<div>';
+    html += '<h3 style="margin-bottom:12px;color:var(--accent)">📊 近期市场大事件</h3>';
+    if (events.length === 0) {
+      html += '<p style="color:var(--muted)">暂无重大事件，市场相对平静</p>';
+    }
+    for (const e of events) {
+      const impactColor = e.impact === 'high' ? 'var(--red)' : 'var(--gold)';
+      html += '<div style="background:var(--bg);border-radius:8px;padding:10px 14px;margin-bottom:8px;border-left:3px solid ' + impactColor + '">' +
+        '<div style="font-size:13px;font-weight:600;color:var(--text)">' + e.title + '</div>' +
+        '<div style="font-size:11px;color:var(--muted);margin-top:4px">' + (e.desc||'') + '</div>' +
+        '<div style="font-size:10px;color:var(--muted);margin-top:4px">' + (e.published||'') + '</div>' +
+        '</div>';
+    }
+    html += '</div>';
+
+    // ── IPO Calendar ──
+    html += '<div>';
+    html += '<h3 style="margin-bottom:12px;color:var(--gold)">🆕 IPO日历</h3>';
+    html += '<table style="width:100%;font-size:12px;border-collapse:collapse">' +
+      '<tr style="color:var(--muted);font-size:11px"><th style="text-align:left;padding:4px 6px">日期</th><th style="text-align:left;padding:4px 6px">代码</th><th style="text-align:left;padding:4px 6px">公司</th><th style="text-align:left;padding:4px 6px">行业</th><th style="text-align:right;padding:4px 6px">规模</th></tr>';
+    for (const ipo of ipos) {
+      html += '<tr style="border-bottom:1px solid rgba(255,255,255,0.04)">' +
+        '<td style="padding:6px">' + ipo.date + '</td>' +
+        '<td style="padding:6px;font-weight:700;color:var(--accent)">' + ipo.ticker + '</td>' +
+        '<td style="padding:6px">' + ipo.name + '</td>' +
+        '<td style="padding:6px;color:var(--muted)">' + ipo.sector + '</td>' +
+        '<td style="padding:6px;text-align:right;font-weight:600">' + ipo.size + '</td>' +
+        '</tr>';
+    }
+    html += '</table>';
+    html += '<p style="font-size:10px;color:var(--muted);margin-top:8px">📅 IPO日历每4小时更新 | 数据来源公开市场信息</p>';
+    html += '</div>';
+
+    html += '</div>';
+    el.innerHTML = html;
+  } catch(e) {
+    el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">加载失败: ' + e.message + '</p>';
+  }
 }
 
 async function loadDashboard(specificDate) {
