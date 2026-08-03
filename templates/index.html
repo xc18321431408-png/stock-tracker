@@ -490,6 +490,8 @@ function switchMarket(m) {
       else if (text.includes('轮动')) renderRotationChart();
       else if (text.includes('相关')) renderCorrelationChart();
       else if (text.includes('趋势')) renderTrendsPage();
+      else if (text.includes('选股')) loadScreener();
+      else if (text.includes('情报')) loadIntel();
       else if (text.includes('量化')) loadBacktestHistory();
     }
   });
