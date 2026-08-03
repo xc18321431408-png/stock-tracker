@@ -304,16 +304,19 @@ canvas{max-height:380px}
 <div id="tab-t0" style="display:none">
 <div class="header"><div><h1>📉 <span>做T助手</span></h1><div class="meta">5分钟K线 | RSI+MACD+布林带+VWAP多信号共振 | 15分钟延迟</div></div></div>
 <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-  <input type="text" id="t0Symbol" placeholder="输入代码如 NVDA, AAPL, SPY..." style="flex:1;min-width:200px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px" onkeydown="if(event.key==='Enter')loadT0()">
+  <input type="text" id="t0Symbol" placeholder="美股: NVDA / A股: 600519.SS (上海) 或 000858.SZ (深圳)" style="flex:1;min-width:280px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px" onkeydown="if(event.key==='Enter')loadT0()">
   <button id="t0AnalyzeBtn" onclick="loadT0()" style="padding:10px 20px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🔍 分析</button>
-  <button id="t0RefreshBtn" onclick="refreshT0()" style="padding:10px 16px;background:var(--card);border:1px solid var(--accent);color:var(--accent);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🔄 刷新数据</button>
-  <button onclick="quickT0('NVDA')" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:11px">NVDA</button>
-  <button onclick="quickT0('TSLA')" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:11px">TSLA</button>
-  <button onclick="quickT0('AAPL')" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:11px">AAPL</button>
-  <button onclick="quickT0('SPY')" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:11px">SPY</button>
-  <button onclick="quickT0('QQQ')" style="padding:6px 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:11px">QQQ</button>
+  <button id="t0RefreshBtn" onclick="refreshT0()" style="padding:10px 16px;background:var(--card);border:1px solid var(--accent);color:var(--accent);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🔄 刷新</button>
+  <span style="font-size:10px;color:var(--muted)">美股:</span>
+  <button onclick="quickT0('NVDA')" style="padding:5px 10px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:10px">NVDA</button>
+  <button onclick="quickT0('SPY')" style="padding:5px 10px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:10px">SPY</button>
+  <span style="font-size:10px;color:var(--muted)">A股:</span>
+  <button onclick="quickT0('600519.SS')" style="padding:5px 10px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:10px">贵州茅台</button>
+  <button onclick="quickT0('000858.SZ')" style="padding:5px 10px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:10px">五粮液</button>
+  <button onclick="quickT0('300750.SZ')" style="padding:5px 10px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:10px">宁德时代</button>
+  <button onclick="quickT0('512480.SS')" style="padding:5px 10px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:10px">半导体ETF</button>
 </div>
-<div id="t0Content"><p style="text-align:center;color:var(--muted);padding:60px">👆 输入美股代码，查看实时做T信号</p></div>
+<div id="t0Content"><p style="text-align:center;color:var(--muted);padding:60px">👆 输入代码或点快捷按钮，查看实时做T信号<br><span style="font-size:11px">A股代码格式：上海 XXXXXX.SS | 深圳 XXXXXX.SZ</span></p></div>
 </div>
 
 <!-- ==================== SCREENER TAB ==================== -->
