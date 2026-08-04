@@ -2390,6 +2390,29 @@ def api_stock_history(symbol):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/watchlist/quotes', methods=['POST'])
+def api_watchlist_quotes():
+    """Batch fetch real-time quotes for a list of symbols."""
+    symbols = request.get_json().get('symbols', []) if request.is_json else []
+    if not symbols: return jsonify({"quotes": []})
+    results = []
+    for sym in symbols[:50]:
+        try:
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
+            resp = requests.get(url, headers=YF_HEADERS, timeout=8)
+            if resp.status_code != 200: continue
+            r = resp.json().get('chart',{}).get('result',[None])[0]
+            if not r: continue
+            closes = r.get('indicators',{}).get('quote',[{}])[0].get('close',[])
+            valid = [c for c in closes if c is not None]
+            if len(valid) < 2: continue
+            latest, prev = valid[-1], valid[-2]
+            chg_pct = round((latest-prev)/prev*100, 2) if prev>0 else 0
+            results.append({"symbol": sym, "price": round(latest,2), "change_pct": chg_pct})
+            time.sleep(0.08)
+        except: pass
+    return jsonify({"quotes": results})
+
 @app.route('/api/stock/<symbol>/t0')
 def api_t0_signals(symbol):
     """Return T+0 intraday signals: RSI(6), MACD 5-min, Bollinger Bands, VWAP."""

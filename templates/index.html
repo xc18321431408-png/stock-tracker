@@ -159,6 +159,7 @@ canvas{max-height:380px}
   <button class="tab" onclick="switchTab('rotation')">🔥 板块轮动</button>
   <button class="tab" onclick="switchTab('correlation')">🔗 相关性矩阵</button>
   <button class="tab" onclick="switchTab('trends')">📈 趋势分析</button>
+  <button class="tab" onclick="switchTab('watchlist')">⭐ 自选监控</button>
   <button class="tab" onclick="switchTab('t0')">📉 做T助手</button>
   <button class="tab" onclick="switchTab('screener')">🎯 智能选股</button>
   <button class="tab" onclick="switchTab('intel')">📰 市场情报</button>
@@ -300,6 +301,22 @@ canvas{max-height:380px}
 </div>
 </div>
 
+<!-- ==================== WATCHLIST TAB ==================== -->
+<div id="tab-watchlist" style="display:none">
+<div class="header"><div><h1>⭐ <span>自选监控</span></h1><div class="meta">实时行情 | 自定义股票池 | 本地存储 | 每30秒自动刷新</div></div></div>
+<div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+  <input type="text" id="wlSymbol" placeholder="添加自选：NVDA 或 600519.SS..." style="flex:1;min-width:200px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px" onkeydown="if(event.key==='Enter')addToWatchlist()">
+  <button onclick="addToWatchlist()" style="padding:10px 20px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">➕ 添加</button>
+  <button onclick="refreshWatchlist()" id="wlRefreshBtn" style="padding:10px 16px;background:var(--card);border:1px solid var(--accent);color:var(--accent);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🔄 刷新</button>
+  <span style="font-size:10px;color:var(--muted)">快捷添加:</span>
+  <button onclick="quickAddWL('NVDA')" style="padding:5px 10px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:10px">NVDA</button>
+  <button onclick="quickAddWL('SPY')" style="padding:5px 10px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:10px">SPY</button>
+  <button onclick="quickAddWL('600519.SS')" style="padding:5px 10px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:10px">茅台</button>
+  <button onclick="quickAddWL('300750.SZ')" style="padding:5px 10px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:10px">宁德</button>
+</div>
+<div id="wlContent"><p style="text-align:center;color:var(--muted);padding:60px">👆 添加你关注的股票，实时监控走势<br><span style="font-size:11px">数据保存在浏览器本地 | 切换美股/A股不影响自选列表</span></p></div>
+</div>
+
 <!-- ==================== T0 HELPER TAB ==================== -->
 <div id="tab-t0" style="display:none">
 <div class="header"><div><h1>📉 <span>做T助手</span></h1><div class="meta">5分钟K线 | RSI+MACD+布林带+VWAP多信号共振 | 15分钟延迟</div></div></div>
@@ -424,18 +441,20 @@ canvas{max-height:380px}
 // ── Tab Switching ──
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    t.classList.toggle('active', (tab==='dashboard'&&i===0)||(tab==='bubble'&&i===1)||(tab==='rotation'&&i===2)||(tab==='correlation'&&i===3)||(tab==='trends'&&i===4)||(tab==='t0'&&i===5)||(tab==='screener'&&i===6)||(tab==='intel'&&i===7)||(tab==='quant'&&i===8));
+    t.classList.toggle('active', (tab==='dashboard'&&i===0)||(tab==='bubble'&&i===1)||(tab==='rotation'&&i===2)||(tab==='correlation'&&i===3)||(tab==='trends'&&i===4)||(tab==='watchlist'&&i===5)||(tab==='t0'&&i===6)||(tab==='screener'&&i===7)||(tab==='intel'&&i===8)||(tab==='quant'&&i===9));
   });
   document.getElementById('tab-dashboard').style.display = tab==='dashboard'?'block':'none';
   document.getElementById('tab-bubble').style.display = tab==='bubble'?'block':'none';
   document.getElementById('tab-rotation').style.display = tab==='rotation'?'block':'none';
   document.getElementById('tab-correlation').style.display = tab==='correlation'?'block':'none';
   document.getElementById('tab-trends').style.display = tab==='trends'?'block':'none';
+  document.getElementById('tab-watchlist').style.display = tab==='watchlist'?'block':'none';
   document.getElementById('tab-t0').style.display = tab==='t0'?'block':'none';
   document.getElementById('tab-screener').style.display = tab==='screener'?'block':'none';
   document.getElementById('tab-intel').style.display = tab==='intel'?'block':'none';
   document.getElementById('tab-quant').style.display = tab==='quant'?'block':'none';
   if (tab==='trends') renderTrendsPage();
+  if (tab==='watchlist') renderWatchlist();
   if (tab==='t0') { const s=document.getElementById('t0Symbol'); if(s.value) loadT0(); }
   if (tab==='screener') loadScreener();
   if (tab==='intel') loadIntel();
@@ -627,7 +646,76 @@ function navigateToLatest() {
   loadDashboard();
 }
 
-// ── Smart Stock Screener ──
+// ── Custom Watchlist ──
+function getStockWatchlist() { try { return JSON.parse(localStorage.getItem('stock_watchlist')||'[]'); } catch(e) { return []; } }
+function saveStockWatchlist(arr) { localStorage.setItem('stock_watchlist', JSON.stringify(arr)); }
+function quickAddWL(sym) { document.getElementById('wlSymbol').value = sym; addToWatchlist(); }
+
+function addToWatchlist() {
+  const sym = document.getElementById('wlSymbol').value.trim().toUpperCase();
+  if (!sym) return;
+  const list = getStockWatchlist();
+  if (list.includes(sym)) { document.getElementById('wlSymbol').value = ''; return; }
+  list.push(sym); saveStockWatchlist(list);
+  document.getElementById('wlSymbol').value = '';
+  showToast('✅ 已添加 ' + sym);
+  renderWatchlist();
+}
+
+function removeFromWatchlist(sym) {
+  let list = getStockWatchlist();
+  list = list.filter(s => s !== sym); saveStockWatchlist(list);
+  showToast('🗑️ 已移除 ' + sym);
+  renderWatchlist();
+}
+
+async function refreshWatchlist() {
+  const btn = document.getElementById('wlRefreshBtn');
+  btn.textContent = '⏳ 刷新中...'; btn.disabled = true;
+  await renderWatchlist();
+  const now = new Date().toLocaleTimeString('zh-CN');
+  btn.textContent = '✅ ' + now; btn.style.color = 'var(--green)';
+  setTimeout(() => { btn.textContent = '🔄 刷新'; btn.style.color = 'var(--accent)'; btn.disabled = false; }, 3000);
+}
+
+async function renderWatchlist() {
+  const el = document.getElementById('wlContent');
+  const list = getStockWatchlist();
+  if (list.length === 0) { el.innerHTML = '<p style="text-align:center;color:var(--muted);padding:60px">👆 添加你关注的股票</p>'; return; }
+
+  el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div></div>';
+  try {
+    const resp = await fetch('/api/watchlist/quotes', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({symbols:list}) });
+    const data = await resp.json();
+    const quotes = data.quotes || [];
+    const quoteMap = {}; quotes.forEach(q => quoteMap[q.symbol] = q);
+
+    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">';
+    for (const sym of list) {
+      const q = quoteMap[sym];
+      if (!q) {
+        html += '<div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border);opacity:0.5"><b>' + sym + '</b><br><span style="font-size:11px;color:var(--muted)">数据获取失败</span><span onclick="removeFromWatchlist(\''+sym+'\')" style="float:right;cursor:pointer;font-size:16px">×</span></div>';
+        continue;
+      }
+      const cls = q.change_pct >= 0 ? 'var(--red)' : 'var(--green)';
+      const sign = q.change_pct >= 0 ? '+' : '';
+      const emoji = q.change_pct > 2 ? '🚀' : q.change_pct > 0 ? '📈' : q.change_pct < -2 ? '💥' : '📉';
+      html += '<div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border);border-left:4px solid ' + cls + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center">' +
+        '<span style="font-weight:700;font-size:15px;color:var(--accent)">' + sym + '</span>' +
+        '<span onclick="removeFromWatchlist(\''+sym+'\')" style="cursor:pointer;font-size:18px;color:var(--muted)" title="移除">×</span>' +
+        '</div>' +
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px">' +
+        '<span style="font-size:28px;font-weight:800">' + emoji + ' ' + q.price.toFixed(2) + '</span>' +
+        '<span style="font-size:18px;font-weight:800;color:' + cls + '">' + sign + q.change_pct.toFixed(2) + '%</span>' +
+        '</div>' +
+        '</div>';
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  } catch(e) { el.innerHTML = '<p style="color:var(--red)">加载失败: ' + e.message + '</p>'; }
+}
+
 // ── T+0 Intraday Signal Assistant ──
 function quickT0(sym) { document.getElementById('t0Symbol').value = sym; loadT0(); }
 
@@ -2568,6 +2656,10 @@ function toggleStatusDetail() {
 
 checkStatus();
 setInterval(checkStatus, 300000);
+setInterval(() => {
+  const wlEl = document.getElementById('tab-watchlist');
+  if (wlEl && wlEl.style.display !== 'none' && getStockWatchlist().length > 0) renderWatchlist();
+}, 30000);
 </script>
 </body>
 </html>
