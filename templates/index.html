@@ -750,23 +750,28 @@ async function renderWatchlist() {
       if (q.vol_ratio > 2) volBadge = '<span style="font-size:10px;background:rgba(239,68,68,0.12);padding:2px 6px;border-radius:4px;color:var(--red)">放量 ' + q.vol_ratio.toFixed(1) + 'x</span>';
       else if (q.vol_ratio > 1.3) volBadge = '<span style="font-size:10px;background:rgba(56,189,248,0.1);padding:2px 6px;border-radius:4px;color:var(--accent)">量 ' + q.vol_ratio.toFixed(1) + 'x</span>';
 
-      html += '<div class="wl-card" style="background:var(--bg);border-radius:12px;padding:16px;border:1px solid var(--border);border-left:4px solid ' + cls + ';cursor:pointer;transition:all .15s" onclick="quickT0(\''+sym+'\');switchTab(\'t0\')">' +
-        // Header
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+      const detailId = 'wl-detail-' + idx;
+      html += '<div class="wl-card" style="background:var(--bg);border-radius:12px;padding:16px;border:1px solid var(--border);border-left:4px solid ' + cls + ';cursor:pointer;transition:all .15s">' +
+        // Header (clickable to expand)
+        '<div onclick="toggleWLDetail(\'' + detailId + '\',\'' + sym + '\')" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
         '<span style="font-weight:700;font-size:14px;color:var(--accent)">' + sym + '</span>' +
         '<div style="display:flex;gap:6px;align-items:center">' + rsiBadge + volBadge + '<span onclick="event.stopPropagation();removeFromWatchlist(\''+sym+'\')" style="cursor:pointer;font-size:20px;color:var(--muted);line-height:1" title="移除">×</span></div>' +
         '</div>' +
         // Price row
-        '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">' +
+        '<div onclick="toggleWLDetail(\'' + detailId + '\',\'' + sym + '\')" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">' +
         '<span style="font-size:30px;font-weight:800">' + q.price.toFixed(2) + '</span>' +
         '<span style="font-size:20px;font-weight:800;color:' + cls + '">' + sign + q.change_pct.toFixed(2) + '%</span>' +
         '</div>' +
         // Sparkline
         '<canvas id="' + canvasId + '" width="' + (q.sparkline?q.sparkline.length*10:200) + '" height="50" style="width:100%;height:50px"></canvas>' +
         // Bottom info
-        '<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--muted)">' +
+        '<div onclick="toggleWLDetail(\'' + detailId + '\',\'' + sym + '\')" style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--muted)">' +
         '<span>高 ' + (q.high||0).toFixed(2) + '</span><span>低 ' + (q.low||0).toFixed(2) + '</span>' +
-        '<span style="color:var(--accent)">点击查看做T信号 →</span>' +
+        '<span style="color:var(--accent)">点击展开日内K线 ▼</span>' +
+        '</div>' +
+        // Expandable detail panel (hidden by default)
+        '<div id="' + detailId + '" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">' +
+        '<div class="loading-spinner" style="padding:20px"><div class="spinner"></div></div>' +
         '</div>' +
         '</div>';
       idx++;
@@ -782,6 +787,55 @@ async function renderWatchlist() {
       idx++;
     }
   } catch(e) { el.innerHTML = '<p style="color:var(--red)">加载失败: ' + e.message + '</p>'; }
+}
+
+async function toggleWLDetail(detailId, sym) {
+  const el = document.getElementById(detailId);
+  if (el.style.display === 'block') { el.style.display = 'none'; return; }
+  el.style.display = 'block'; el.innerHTML = '<div class="loading-spinner" style="padding:20px"><div class="spinner"></div></div>';
+  try {
+    const cdResp = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/' + sym + '?interval=5m&range=1d&includePrePost=true');
+    const cd = await cdResp.json(); const cr = cd.get('chart',{}).get('result',[None])[0];
+    if (!cr) { el.innerHTML = '<p style="color:var(--red);font-size:11px">无日内数据</p>'; return; }
+    const ts = cr.get('timestamp',[]); const q = cr.get('indicators',{}).get('quote',[{}])[0];
+    const closes = q.get('close',[]); const highs = q.get('high',[]); const lows = q.get('low',[]);
+    const today = new Date().toISOString().slice(0,10);
+    const bars = [];
+    for (let i = 0; i < ts.length; i++) {
+      if (new Date(ts[i]*1000).toISOString().slice(0,10) === today && closes[i] != null)
+        bars.push({t:ts[i],c:closes[i],h:highs[i],l:lows[i]});
+    }
+    const n = bars.length; if (n < 10) { el.innerHTML = '<p style="color:var(--muted)">今日数据不足</p>'; return; }
+    const bbU=[],bbM=[],bbL=[],rsiV=[],macdV=[],sigV=[],histV=[];
+    for (let i=0;i<n;i++) {
+      if (i>=19){const w=bars.slice(i-19,i+1).map(b=>b.c);const ma=w.reduce((a,b)=>a+b,0)/20;const sd=Math.sqrt(w.reduce((a,b)=>a+(b-ma)**2,0)/20);bbU.push(ma+2*sd);bbM.push(ma);bbL.push(ma-2*sd);}else{bbU.push(null);bbM.push(null);bbL.push(null);}
+      if (i>=5){const g=[],l=[];for(let j=i-5;j<i;j++){const d=bars[j+1].c-bars[j].c;g.push(Math.max(d,0));l.push(Math.max(-d,0))}const ag=g.reduce((a,b)=>a+b,0)/6,al=l.reduce((a,b)=>a+b,0)/6;rsiV.push(al===0?100:Math.round((100-100/(1+ag/al))*10)/10);}else rsiV.push(null);
+      if (i>=25){const ema=(d,p)=>{const k=2/(p+1);let r=[d[0]];for(let j=1;j<d.length;j++)r.push(d[j]*k+r[j-1]*(1-k));return r};const e12=ema(bars.map(b=>b.c),12),e26=ema(bars.map(b=>b.c),26);const m=e12.map((v,j)=>v-e26[j]);const s=ema(m,9);macdV.push(m[i]);sigV.push(s[i]);histV.push(m[i]-s[i]);}else{macdV.push(null);sigV.push(null);histV.push(null);}
+    }
+    const labels = bars.map(b => new Date(b.t*1000).toLocaleTimeString('zh-CN',{hour:'2-digit',minute:'2-digit'}));
+    const uid = detailId.replace('wl-detail-','');
+    let html = '<div style="display:grid;grid-template-rows:200px 80px 80px;gap:6px">';
+    html += '<div><canvas id="wl-bb-'+uid+'" style="width:100%;height:100%"></canvas></div>';
+    html += '<div><canvas id="wl-rsi-'+uid+'" style="width:100%;height:100%"></canvas></div>';
+    html += '<div><canvas id="wl-macd-'+uid+'" style="width:100%;height:100%"></canvas></div></div>';
+    html += '<div style="text-align:center;font-size:10px;color:var(--muted);margin-top:6px">日内K线 · BB(20,2) · RSI(6) · MACD(12,26,9) | <span onclick="event.stopPropagation();switchTab(\'t0\');document.getElementById(\'t0Symbol\').value=\''+sym+'\';loadT0()" style="color:var(--accent);cursor:pointer">📉 做T面板 →</span></div>';
+    el.innerHTML = html;
+    const opt = (title)=>({responsive:true,maintainAspectRatio:false,interaction:{intersect:false,mode:'index'},plugins:{legend:{display:false},title:{display:true,text:title,color:'#94a3b8',font:{size:10},align:'start',padding:0}},scales:{x:{ticks:{color:'#94a3b8',font:{size:8},maxTicksLimit:8,autoSkip:true},grid:{color:'rgba(255,255,255,0.03)'}},y:{ticks:{color:'#94a3b8',font:{size:9}},grid:{color:'rgba(255,255,255,0.05)'}}}});
+    new Chart(document.getElementById('wl-bb-'+uid),{type:'line',data:{labels,datasets:[
+      {label:'Price',data:bars.map(b=>b.c),borderColor:'#38bdf8',borderWidth:1.5,pointRadius:0},
+      {label:'BB U',data:bbU,borderColor:'rgba(239,68,68,0.5)',borderWidth:1,pointRadius:0,borderDash:[3,3]},
+      {label:'BB M',data:bbM,borderColor:'rgba(148,163,184,0.4)',borderWidth:0.8,pointRadius:0},
+      {label:'BB L',data:bbL,borderColor:'rgba(34,197,94,0.5)',borderWidth:1,pointRadius:0,borderDash:[3,3]},
+    ]},options:opt('价格 · 布林带(20,2)')});
+    new Chart(document.getElementById('wl-rsi-'+uid),{type:'line',data:{labels,datasets:[
+      {label:'RSI(6)',data:rsiV,borderColor:'#f59e0b',borderWidth:1.5,pointRadius:0,fill:false},
+    ]},options:{...opt('RSI(6)'),scales:{...opt('RSI(6)').scales,y:{min:0,max:100,ticks:{color:'#94a3b8',font:{size:8},stepSize:25},grid:{color:'rgba(255,255,255,0.05)'}}}}});
+    new Chart(document.getElementById('wl-macd-'+uid),{type:'bar',data:{labels,datasets:[
+      {label:'Hist',data:histV,backgroundColor:histV.map(v=>v>=0?'rgba(239,68,68,0.5)':'rgba(34,197,94,0.5)'),borderWidth:0},
+      {label:'MACD',data:macdV,type:'line',borderColor:'#38bdf8',borderWidth:1,pointRadius:0},
+      {label:'Signal',data:sigV,type:'line',borderColor:'#f59e0b',borderWidth:1,pointRadius:0},
+    ]},options:opt('MACD(12,26,9)')});
+  } catch(e) { el.innerHTML = '<p style="color:var(--red);font-size:11px">加载失败</p>'; }
 }
 
 // ── T+0 Intraday Signal Assistant ──
