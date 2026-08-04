@@ -2005,17 +2005,17 @@ async function renderRotationChart() {
         return vb - va;
       }).filter(s => s[p.key] != null && !isNaN(s[p.key]));
 
-      const top5 = sorted.slice(0, 5);
-      const bot5 = sorted.slice(-5).reverse();
+      const top10 = sorted.slice(0, 10);
+      const bot10 = sorted.slice(-10).reverse();
       const display = idx === 3 ? 'block' : 'none';
 
       html += `<div class="rot-period-panel" data-period="${idx}" style="display:${display}">`;
       html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">';
 
-      // Top 5 (strongest)
+      // Top 10 (strongest)
       html += '<div>';
-      html += '<div style="font-size:14px;font-weight:700;color:var(--red);margin-bottom:10px;display:flex;align-items:center;gap:6px">🔴 最强 Top 5</div>';
-      top5.forEach((s, rank) => {
+      html += '<div style="font-size:14px;font-weight:700;color:var(--red);margin-bottom:10px;display:flex;align-items:center;gap:6px">🔴 最强 Top 10</div>';
+      top10.forEach((s, rank) => {
         const v = s[p.key];
         const barW = Math.min(Math.abs(v) / 15 * 100, 100);
         html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--red)">
@@ -2036,8 +2036,8 @@ async function renderRotationChart() {
 
       // Bottom 5 (weakest)
       html += '<div>';
-      html += '<div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:10px;display:flex;align-items:center;gap:6px">🟢 最弱 Top 5</div>';
-      bot5.forEach((s, rank) => {
+      html += '<div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:10px;display:flex;align-items:center;gap:6px">🟢 最弱 Top 10</div>';
+      bot10.forEach((s, rank) => {
         const v = s[p.key];
         const barW = Math.min(Math.abs(v) / 15 * 100, 100);
         html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--green)">
