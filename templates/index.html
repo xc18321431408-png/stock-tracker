@@ -309,6 +309,7 @@ canvas{max-height:380px}
   <input type="text" id="wlSymbol" placeholder="添加自选：NVDA 或 600519.SS..." style="flex:1;min-width:200px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px" onkeydown="if(event.key==='Enter')addToWatchlist()">
   <button onclick="addToWatchlist()" style="padding:10px 20px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">➕ 添加</button>
   <button onclick="refreshWatchlist()" id="wlRefreshBtn" style="padding:10px 16px;background:var(--card);border:1px solid var(--accent);color:var(--accent);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🔄 刷新</button>
+  <button onclick="clearWatchlist()" style="padding:10px 16px;background:var(--card);border:1px solid var(--red);color:var(--red);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🗑️ 清空</button>
   <span style="font-size:10px;color:var(--muted)">快捷添加:</span>
   <button onclick="quickAddWL('NVDA')" style="padding:5px 10px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:10px">NVDA</button>
   <button onclick="quickAddWL('SPY')" style="padding:5px 10px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:6px;cursor:pointer;font-size:10px">SPY</button>
@@ -670,6 +671,13 @@ function removeFromWatchlist(sym) {
   renderWatchlist();
 }
 
+function clearWatchlist() {
+  if (getStockWatchlist().length === 0) return;
+  saveStockWatchlist([]);
+  showToast('🗑️ 已清空全部自选');
+  renderWatchlist();
+}
+
 async function refreshWatchlist() {
   const btn = document.getElementById('wlRefreshBtn');
   btn.textContent = '⏳ 刷新中...'; btn.disabled = true;
@@ -891,6 +899,7 @@ async function loadScreener() {
         '<span style="color:var(--muted)">MACD:</span><span style="color:' + (r.macd_uptrend?'var(--red)':'var(--green)') + '">' + (r.macd_uptrend?'📈 上升通道':'📉') + '</span>' +
         '<span style="color:var(--muted);margin-left:4px">BB:</span><span>' + bbIcon + ' ' + (r.bb_pos_pct||'?') + '%</span>' +
         '<span style="margin-left:auto;font-weight:700;font-size:14px;color:var(--gold)">⭐' + r.score + '</span>' +
+        '<button onclick="event.stopPropagation();quickAddWL(\'' + r.symbol + '\')" style="margin-left:6px;padding:3px 8px;background:var(--accent);border:none;color:#fff;border-radius:4px;cursor:pointer;font-size:10px;white-space:nowrap">➕ 自选</button>' +
         '</div>' +
         '</div>';
     }
