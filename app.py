@@ -2398,7 +2398,7 @@ def api_watchlist_quotes():
     results = []
     for sym in symbols[:50]:
         try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=1mo&includePrePost=false"
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=1mo&includePrePost=true"
             resp = requests.get(url, headers=YF_HEADERS, timeout=8)
             if resp.status_code != 200: continue
             chart_data = resp.json().get('chart',{}).get('result',[None])[0]
