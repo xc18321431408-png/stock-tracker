@@ -794,17 +794,11 @@ async function toggleWLDetail(detailId, sym) {
   if (el.style.display === 'block') { el.style.display = 'none'; return; }
   el.style.display = 'block'; el.innerHTML = '<div class="loading-spinner" style="padding:20px"><div class="spinner"></div></div>';
   try {
-    const cdResp = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/' + sym + '?interval=5m&range=1d&includePrePost=true');
-    const cd = await cdResp.json(); const cr = cd.get('chart',{}).get('result',[None])[0];
-    if (!cr) { el.innerHTML = '<p style="color:var(--red);font-size:11px">无日内数据</p>'; return; }
-    const ts = cr.get('timestamp',[]); const q = cr.get('indicators',{}).get('quote',[{}])[0];
-    const closes = q.get('close',[]); const highs = q.get('high',[]); const lows = q.get('low',[]);
-    const today = new Date().toISOString().slice(0,10);
-    const bars = [];
-    for (let i = 0; i < ts.length; i++) {
-      if (new Date(ts[i]*1000).toISOString().slice(0,10) === today && closes[i] != null)
-        bars.push({t:ts[i],c:closes[i],h:highs[i],l:lows[i]});
-    }
+    const cdResp = await fetch('/api/stock/' + sym + '/intraday');
+    const cd = await cdResp.json();
+    if (cd.error) { el.innerHTML = '<p style="color:var(--red);font-size:11px">' + cd.error + '</p>'; return; }
+    const bars = cd.bars || [];
+    if (bars.length < 10) { el.innerHTML = '<p style="color:var(--muted)">今日数据不足</p>'; return; }
     const n = bars.length; if (n < 10) { el.innerHTML = '<p style="color:var(--muted)">今日数据不足</p>'; return; }
     const bbU=[],bbM=[],bbL=[],rsiV=[],macdV=[],sigV=[],histV=[];
     for (let i=0;i<n;i++) {

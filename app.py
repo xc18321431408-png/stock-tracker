@@ -2446,6 +2446,27 @@ def api_watchlist_quotes():
         except: pass
     return jsonify({"quotes": results})
 
+@app.route('/api/stock/<symbol>/intraday')
+def api_intraday_bars(symbol):
+    """Return today's 5-min intraday bars for charting (CORS-safe proxy)."""
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=5m&range=1d&includePrePost=true"
+        resp = requests.get(url, headers=YF_HEADERS, timeout=10)
+        if resp.status_code != 200: return jsonify({"error":"fetch failed"}), 500
+        data = resp.json()
+        r = data.get('chart',{}).get('result',[None])[0]
+        if not r: return jsonify({"error":"no data"}), 500
+        timestamps = r.get('timestamp',[]); quotes = r.get('indicators',{}).get('quote',[{}])[0]
+        closes = quotes.get('close',[]); opens = quotes.get('open',[])
+        highs = quotes.get('high',[]); lows = quotes.get('low',[])
+        bars = []
+        for i in range(len(timestamps)):
+            if closes[i] is not None:
+                bars.append({"t": timestamps[i], "o": round(opens[i] or 0, 2), "h": round(highs[i] or 0, 2), "l": round(lows[i] or 0, 2), "c": round(closes[i] or 0, 2)})
+        return jsonify({"symbol": symbol, "bars": bars[-80:]})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/stock/<symbol>/t0')
 def api_t0_signals(symbol):
     """Return T+0 intraday signals: RSI(6), MACD 5-min, Bollinger Bands, VWAP."""
