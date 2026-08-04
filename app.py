@@ -2392,23 +2392,45 @@ def api_stock_history(symbol):
 
 @app.route('/api/watchlist/quotes', methods=['POST'])
 def api_watchlist_quotes():
-    """Batch fetch real-time quotes for a list of symbols."""
+    """Batch fetch real-time quotes + sparkline + quick RSI for watchlist."""
     symbols = request.get_json().get('symbols', []) if request.is_json else []
     if not symbols: return jsonify({"quotes": []})
     results = []
     for sym in symbols[:50]:
         try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=1mo"
             resp = requests.get(url, headers=YF_HEADERS, timeout=8)
             if resp.status_code != 200: continue
             r = resp.json().get('chart',{}).get('result',[None])[0]
             if not r: continue
-            closes = r.get('indicators',{}).get('quote',[{}])[0].get('close',[])
-            valid = [c for c in closes if c is not None]
-            if len(valid) < 2: continue
-            latest, prev = valid[-1], valid[-2]
+            quotes_raw = r.get('indicators',{}).get('quote',[{}])[0]
+            closes = [c for c in quotes_raw.get('close',[]) if c is not None]
+            highs = quotes_raw.get('high',[]); lows = quotes_raw.get('low',[])
+            volumes = quotes_raw.get('volume',[]);
+            if len(closes) < 2: continue
+            latest, prev = closes[-1], closes[-2]
             chg_pct = round((latest-prev)/prev*100, 2) if prev>0 else 0
-            results.append({"symbol": sym, "price": round(latest,2), "change_pct": chg_pct})
+            day_high = round(max(highs[-5:]),2) if len(highs)>=5 else round(latest,2)
+            day_low = round(min(lows[-5:]),2) if len(lows)>=5 else round(latest,2)
+            # Sparkline: last 20 closes
+            spark = [round(c,2) for c in closes[-20:]]
+            # Quick daily RSI(14)
+            rsi14 = None
+            if len(closes) >= 15:
+                gains, losses = [], []
+                for i in range(1,len(closes)): d=closes[i]-closes[i-1]; gains.append(max(d,0)); losses.append(max(-d,0))
+                if len(gains)>=14:
+                    ag=sum(gains[-14:])/14; al=sum(losses[-14:])/14
+                    rs=ag/al if al>0 else 100; rsi14=round(100-100/(1+rs),1)
+            # Volume surge
+            vol_now = volumes[-1] if volumes and volumes[-1] else 0
+            vol_avg = sum(v for v in volumes[-6:-1] if v) / 5 if len(volumes)>=6 and any(volumes[-6:-1]) else 1
+            vol_ratio = round(vol_now/vol_avg,1) if vol_avg>0 else 1.0
+            results.append({
+                "symbol": sym, "price": round(latest,2), "change_pct": chg_pct,
+                "high": day_high, "low": day_low, "sparkline": spark,
+                "rsi14": rsi14, "vol_ratio": vol_ratio
+            })
             time.sleep(0.08)
         except: pass
     return jsonify({"quotes": results})

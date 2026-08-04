@@ -130,6 +130,7 @@ canvas{max-height:380px}
 /* News panel */
 .news-item{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border-radius:8px;margin-bottom:4px;transition:background .15s;font-size:13px;line-height:1.5}
 .news-item:hover{background:rgba(56,189,248,0.05)}
+.wl-card:hover{border-color:var(--accent)!important;transform:translateY(-2px);box-shadow:var(--hover-shadow)}
 .news-item .news-source{font-size:10px;font-weight:600;color:#fff;white-space:nowrap;min-width:56px;text-align:center;padding:3px 8px;border-radius:4px;flex-shrink:0}
 .news-item .news-source.src-yahoo{background:rgba(99,102,241,0.4);color:#a5b4fc}
 .news-item .news-source.src-kol{background:rgba(239,68,68,0.3);color:#fca5a5}
@@ -678,6 +679,30 @@ async function refreshWatchlist() {
   setTimeout(() => { btn.textContent = '🔄 刷新'; btn.style.color = 'var(--accent)'; btn.disabled = false; }, 3000);
 }
 
+function drawSparkline(canvasId, data, color) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || !data || data.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height, pad = 2;
+  const min = Math.min(...data), max = Math.max(...data), range = max - min || 1;
+  ctx.clearRect(0,0,W,H);
+  ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+  for (let i = 0; i < data.length; i++) {
+    const x = pad + (i/(data.length-1)) * (W - 2*pad);
+    const y = H - pad - ((data[i]-min)/range) * (H - 2*pad);
+    i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  // Fill gradient
+  ctx.lineTo(pad+(data.length-1)/(data.length-1)*(W-2*pad), H-pad);
+  ctx.lineTo(pad, H-pad);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0, color.replace('1)', '0.15)').replace('rgb','rgba'));
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = grad; ctx.fill();
+}
+
 async function renderWatchlist() {
   const el = document.getElementById('wlContent');
   const list = getStockWatchlist();
@@ -690,29 +715,64 @@ async function renderWatchlist() {
     const quotes = data.quotes || [];
     const quoteMap = {}; quotes.forEach(q => quoteMap[q.symbol] = q);
 
-    let html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px">';
+    let html = '';
+    let idx = 0;
+    const sparkColors = [];
     for (const sym of list) {
       const q = quoteMap[sym];
       if (!q) {
-        html += '<div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border);opacity:0.5"><b>' + sym + '</b><br><span style="font-size:11px;color:var(--muted)">数据获取失败</span><span onclick="removeFromWatchlist(\''+sym+'\')" style="float:right;cursor:pointer;font-size:16px">×</span></div>';
-        continue;
+        html += '<div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border);opacity:0.5"><b>' + sym + '</b><br><span style="font-size:11px;color:var(--muted)">无数据</span><span onclick="removeFromWatchlist(\''+sym+'\')" style="float:right;cursor:pointer">×</span></div>';
+        idx++; continue;
       }
       const cls = q.change_pct >= 0 ? 'var(--red)' : 'var(--green)';
       const sign = q.change_pct >= 0 ? '+' : '';
-      const emoji = q.change_pct > 2 ? '🚀' : q.change_pct > 0 ? '📈' : q.change_pct < -2 ? '💥' : '📉';
-      html += '<div style="background:var(--bg);border-radius:10px;padding:14px;border:1px solid var(--border);border-left:4px solid ' + cls + '">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center">' +
-        '<span style="font-weight:700;font-size:15px;color:var(--accent)">' + sym + '</span>' +
-        '<span onclick="removeFromWatchlist(\''+sym+'\')" style="cursor:pointer;font-size:18px;color:var(--muted)" title="移除">×</span>' +
+      const sparkColor = q.change_pct >= 0 ? 'rgb(239,68,68,1)' : 'rgb(34,197,94,1)';
+      sparkColors.push(sparkColor);
+      const canvasId = 'spark-' + idx;
+
+      // RSI badge
+      let rsiBadge = '';
+      if (q.rsi14 != null) {
+        const rsiColor = q.rsi14 < 30 ? 'var(--green)' : q.rsi14 < 40 ? 'var(--accent)' : q.rsi14 > 70 ? 'var(--red)' : 'var(--muted)';
+        const rsiLabel = q.rsi14 < 30 ? '超卖' : q.rsi14 > 70 ? '超买' : '';
+        rsiBadge = '<span style="font-size:10px;background:rgba(0,0,0,0.15);padding:2px 6px;border-radius:4px;color:' + rsiColor + '">RSI ' + q.rsi14 + (rsiLabel?' ' + rsiLabel:'') + '</span>';
+      }
+      // Volume badge
+      let volBadge = '';
+      if (q.vol_ratio > 2) volBadge = '<span style="font-size:10px;background:rgba(239,68,68,0.12);padding:2px 6px;border-radius:4px;color:var(--red)">放量 ' + q.vol_ratio.toFixed(1) + 'x</span>';
+      else if (q.vol_ratio > 1.3) volBadge = '<span style="font-size:10px;background:rgba(56,189,248,0.1);padding:2px 6px;border-radius:4px;color:var(--accent)">量 ' + q.vol_ratio.toFixed(1) + 'x</span>';
+
+      html += '<div class="wl-card" style="background:var(--bg);border-radius:12px;padding:16px;border:1px solid var(--border);border-left:4px solid ' + cls + ';cursor:pointer;transition:all .15s" onclick="quickT0(\''+sym+'\');switchTab(\'t0\')">' +
+        // Header
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+        '<span style="font-weight:700;font-size:14px;color:var(--accent)">' + sym + '</span>' +
+        '<div style="display:flex;gap:6px;align-items:center">' + rsiBadge + volBadge + '<span onclick="event.stopPropagation();removeFromWatchlist(\''+sym+'\')" style="cursor:pointer;font-size:20px;color:var(--muted);line-height:1" title="移除">×</span></div>' +
         '</div>' +
-        '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:6px">' +
-        '<span style="font-size:28px;font-weight:800">' + emoji + ' ' + q.price.toFixed(2) + '</span>' +
-        '<span style="font-size:18px;font-weight:800;color:' + cls + '">' + sign + q.change_pct.toFixed(2) + '%</span>' +
+        // Price row
+        '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px">' +
+        '<span style="font-size:30px;font-weight:800">' + q.price.toFixed(2) + '</span>' +
+        '<span style="font-size:20px;font-weight:800;color:' + cls + '">' + sign + q.change_pct.toFixed(2) + '%</span>' +
+        '</div>' +
+        // Sparkline
+        '<canvas id="' + canvasId + '" width="' + (q.sparkline?q.sparkline.length*10:200) + '" height="50" style="width:100%;height:50px"></canvas>' +
+        // Bottom info
+        '<div style="display:flex;justify-content:space-between;margin-top:6px;font-size:10px;color:var(--muted)">' +
+        '<span>高 ' + (q.high||0).toFixed(2) + '</span><span>低 ' + (q.low||0).toFixed(2) + '</span>' +
+        '<span style="color:var(--accent)">点击查看做T信号 →</span>' +
         '</div>' +
         '</div>';
+      idx++;
     }
-    html += '</div>';
     el.innerHTML = html;
+    // Draw sparklines after DOM update
+    idx = 0;
+    for (const sym of list) {
+      const q = quoteMap[sym];
+      if (q && q.sparkline && sparkColors[idx]) {
+        drawSparkline('spark-' + idx, q.sparkline, sparkColors[idx]);
+      }
+      idx++;
+    }
   } catch(e) { el.innerHTML = '<p style="color:var(--red)">加载失败: ' + e.message + '</p>'; }
 }
 
