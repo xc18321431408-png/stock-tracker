@@ -2404,15 +2404,18 @@ def api_watchlist_quotes():
             chart_data = resp.json().get('chart',{}).get('result',[None])[0]
             if not chart_data: continue
             meta = chart_data.get('meta',{})
-            # Use meta for real-time price (more accurate, no pre/post market mix)
+            # Use meta for price, chart closes for change calculation
             price = meta.get('regularMarketPrice')
-            prev_close = meta.get('chartPreviousClose') or meta.get('previousClose')
-            if not price:
-                quotes_raw = chart_data.get('indicators',{}).get('quote',[{}])[0]
-                closes_tmp = [c for c in quotes_raw.get('close',[]) if c is not None]
-                if len(closes_tmp) < 2: continue
-                price = closes_tmp[-1]; prev_close = closes_tmp[-2]
-            if not price or not prev_close or prev_close <= 0: continue
+            quotes_raw = chart_data.get('indicators',{}).get('quote',[{}])[0]
+            closes_raw = [c for c in quotes_raw.get('close',[]) if c is not None]
+            if not price: price = closes_raw[-1] if closes_raw else 0
+            if len(closes_raw) < 2 or not price: continue
+            # Find last two closes that differ (skip zero-change bars from holidays)
+            prev_close = closes_raw[-2]
+            for i in range(len(closes_raw)-2, 0, -1):
+                if closes_raw[i] != closes_raw[-1]:
+                    prev_close = closes_raw[i]; break
+            if prev_close <= 0: continue
             chg_pct = round((price-prev_close)/prev_close*100, 2)
             # Chart data for sparkline and RSI
             quotes_raw = chart_data.get('indicators',{}).get('quote',[{}])[0]
