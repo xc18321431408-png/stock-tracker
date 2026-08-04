@@ -2398,36 +2398,44 @@ def api_watchlist_quotes():
     results = []
     for sym in symbols[:50]:
         try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=1mo"
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=1mo&includePrePost=false"
             resp = requests.get(url, headers=YF_HEADERS, timeout=8)
             if resp.status_code != 200: continue
-            r = resp.json().get('chart',{}).get('result',[None])[0]
-            if not r: continue
-            quotes_raw = r.get('indicators',{}).get('quote',[{}])[0]
+            chart_data = resp.json().get('chart',{}).get('result',[None])[0]
+            if not chart_data: continue
+            meta = chart_data.get('meta',{})
+            # Use meta for real-time price (more accurate, no pre/post market mix)
+            price = meta.get('regularMarketPrice')
+            prev_close = meta.get('chartPreviousClose') or meta.get('previousClose')
+            if not price:
+                quotes_raw = chart_data.get('indicators',{}).get('quote',[{}])[0]
+                closes_tmp = [c for c in quotes_raw.get('close',[]) if c is not None]
+                if len(closes_tmp) < 2: continue
+                price = closes_tmp[-1]; prev_close = closes_tmp[-2]
+            if not price or not prev_close or prev_close <= 0: continue
+            chg_pct = round((price-prev_close)/prev_close*100, 2)
+            # Chart data for sparkline and RSI
+            quotes_raw = chart_data.get('indicators',{}).get('quote',[{}])[0]
             closes = [c for c in quotes_raw.get('close',[]) if c is not None]
             highs = quotes_raw.get('high',[]); lows = quotes_raw.get('low',[])
-            volumes = quotes_raw.get('volume',[]);
-            if len(closes) < 2: continue
-            latest, prev = closes[-1], closes[-2]
-            chg_pct = round((latest-prev)/prev*100, 2) if prev>0 else 0
-            day_high = round(max(highs[-5:]),2) if len(highs)>=5 else round(latest,2)
-            day_low = round(min(lows[-5:]),2) if len(lows)>=5 else round(latest,2)
-            # Sparkline: last 20 closes
+            volumes = quotes_raw.get('volume',[])
             spark = [round(c,2) for c in closes[-20:]]
-            # Quick daily RSI(14)
+            day_high = round(max(highs[-5:]),2) if len(highs)>=5 else round(price,2)
+            day_low = round(min(lows[-5:]),2) if len(lows)>=5 else round(price,2)
             rsi14 = None
             if len(closes) >= 15:
                 gains, losses = [], []
                 for i in range(1,len(closes)): d=closes[i]-closes[i-1]; gains.append(max(d,0)); losses.append(max(-d,0))
                 if len(gains)>=14:
-                    ag=sum(gains[-14:])/14; al=sum(losses[-14:])/14
-                    rs=ag/al if al>0 else 100; rsi14=round(100-100/(1+rs),1)
-            # Volume surge
-            vol_now = volumes[-1] if volumes and volumes[-1] else 0
-            vol_avg = sum(v for v in volumes[-6:-1] if v) / 5 if len(volumes)>=6 and any(volumes[-6:-1]) else 1
-            vol_ratio = round(vol_now/vol_avg,1) if vol_avg>0 else 1.0
+                    ag=sum(gains[-14:])/14; al=sum(losses[-14:])/14; rs=ag/al if al>0 else 100
+                    rsi14=round(100-100/(1+rs),1)
+            vol_ratio = 1.0
+            if volumes and len(volumes) >= 6:
+                vol_now = volumes[-1] or 0
+                vol_avg = sum(v for v in volumes[-6:-1] if v)/5 if any(v for v in volumes[-6:-1] if v) else 1
+                vol_ratio = round(vol_now/vol_avg,1) if vol_avg>0 else 1.0
             results.append({
-                "symbol": sym, "price": round(latest,2), "change_pct": chg_pct,
+                "symbol": sym, "price": round(price,2), "change_pct": chg_pct,
                 "high": day_high, "low": day_low, "sparkline": spark,
                 "rsi14": rsi14, "vol_ratio": vol_ratio
             })
