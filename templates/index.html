@@ -1733,6 +1733,7 @@ async function runMeanReversion() {
       '<div style="text-align:center;background:var(--bg);border-radius:10px;padding:14px"><div style="font-size:11px;color:var(--muted)">平均夏普</div><div style="font-size:24px;font-weight:800;color:var(--accent)">'+d.sharpe_avg+'</div></div>' +
       '<div style="text-align:center;background:var(--bg);border-radius:10px;padding:14px"><div style="font-size:11px;color:var(--muted)">SPY基准</div><div style="font-size:24px;font-weight:800;color:var(--muted)">'+(d.spy_baseline>=0?'+':'')+d.spy_baseline+'%</div></div>' +
       '</div>' +
+      (d.distribution ? '<div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:12px">📊 收益分布: P10='+d.distribution.p10+'% | P25='+d.distribution.p25+'% | P50='+d.distribution.p50+'% | P75='+d.distribution.p75+'% | P90='+d.distribution.p90+'%</div>' : '') +
       '<h4 style="font-size:13px;color:var(--accent);margin-bottom:8px">🏆 最优参数 Top 5</h4>' +
       '<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="color:var(--muted);font-size:10px"><th style="text-align:left;padding:4px">#</th><th>板块</th><th>RSI</th><th>缩量</th><th>横盘</th><th>日均收益</th><th>胜率</th><th>夏普</th></tr>' + bestParamsHtml + '</table>' +
       '<p style="font-size:10px;color:var(--muted);text-align:center;margin-top:12px">⚠️ 历史回测不代表未来收益。本策略基于均值回归假设：超跌板块中的超卖个股存在短期反弹概率。' + d.simulations + '次蒙特卡洛模拟。</p>' +
@@ -1750,21 +1751,51 @@ async function runMeanReversion() {
 function downloadBacktestCSV() {
   const d = window._backtestData;
   if (!d) return;
-  let csv = 'Sim,AvgReturn%,WinRate%,Sharpe,BottomN,RSI_Max,VolThresh,FlatDays\n';
-  // Best guess: we have aggregated data, create from summary
-  csv += 'Summary,' + d.avg_daily_return + ',' + d.win_rate + ',' + d.sharpe_avg + ',,,\n';
-  csv += 'SPY_Baseline,' + d.spy_baseline + ',,,,,\n';
-  csv += 'Simulations,' + d.simulations + ',,,,,\n';
-  csv += '\nTopParams:\n';
-  if (d.top_params) {
+  let csv = '﻿=== 策略回测汇总 ===\n';
+  csv += '指标,数值\n';
+  csv += '模拟次数,' + d.simulations + '\n';
+  csv += '日均收益(%),' + d.avg_daily_return + '\n';
+  csv += '胜率(%),' + d.win_rate + '\n';
+  csv += '跑赢SPY概率(%),' + d.positive_pct + '\n';
+  csv += '平均夏普,' + d.sharpe_avg + '\n';
+  csv += 'SPY基准日均收益(%),' + d.spy_baseline + '\n';
+  csv += '最佳单次收益(%),' + d.best_sim.avg_return + '\n';
+  csv += '最差单次收益(%),' + d.worst_sim.avg_return + '\n';
+  if (d.distribution) {
+    csv += 'P10收益(%),' + d.distribution.p10 + '\n';
+    csv += 'P25收益(%),' + d.distribution.p25 + '\n';
+    csv += 'P50收益(%),' + d.distribution.p50 + '\n';
+    csv += 'P75收益(%),' + d.distribution.p75 + '\n';
+    csv += 'P90收益(%),' + d.distribution.p90 + '\n';
+  }
+
+  csv += '\n=== 1000次蒙特卡洛模拟明细 ===\n';
+  csv += '排名,日均收益(%),胜率(%),夏普,交易次数,板块数,RSI阈值,缩量倍,横盘天数\n';
+  if (d.all_simulations) {
+    d.all_simulations.forEach((r, i) => {
+      csv += [i+1, r.avg_return, r.win_rate, r.sharpe, r.n_trades,
+        r.params.bottom_n, r.params.rsi_max, r.params.vol_thresh, r.params.flat_days].join(',') + '\n';
+    });
+  } else if (d.top_params) {
     d.top_params.forEach((p, i) => {
-      csv += [i+1, p.avg_return, p.win_rate, p.sharpe, p.params.bottom_n, p.params.rsi_max, p.params.vol_thresh, p.params.flat_days].join(',') + '\n';
+      csv += [i+1, p.avg_return, p.win_rate, p.sharpe, p.n_trades,
+        p.params.bottom_n, p.params.rsi_max, p.params.vol_thresh, p.params.flat_days].join(',') + '\n';
     });
   }
-  const blob = new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8'});
+
+  csv += '\n=== 最优参数 Top 5 ===\n';
+  csv += '排名,日均收益(%),胜率(%),夏普,交易次数,板块数,RSI阈值,缩量倍,横盘天数\n';
+  if (d.top_params) {
+    d.top_params.forEach((p, i) => {
+      csv += [i+1, p.avg_return, p.win_rate, p.sharpe, p.n_trades,
+        p.params.bottom_n, p.params.rsi_max, p.params.vol_thresh, p.params.flat_days].join(',') + '\n';
+    });
+  }
+
+  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = 'backtest_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.href = url; a.download = 'backtest_mc1000_' + new Date().toISOString().slice(0,10) + '.csv';
   a.click(); URL.revokeObjectURL(url);
 }
 

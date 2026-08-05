@@ -2663,6 +2663,14 @@ def api_mean_reversion_backtest():
                 spy_rets.append((spy_prices[nd]-spy_prices[date_str])/spy_prices[date_str]*100)
         spy_avg = sum(spy_rets)/len(spy_rets) if spy_rets else 0
 
+        # Distribution stats
+        rets_sorted = sorted(all_returns)
+        p10 = rets_sorted[int(len(rets_sorted)*0.1)] if len(rets_sorted)>=10 else all_returns[0]
+        p25 = rets_sorted[int(len(rets_sorted)*0.25)] if len(rets_sorted)>=4 else all_returns[0]
+        p50 = rets_sorted[int(len(rets_sorted)*0.5)] if len(rets_sorted)>=2 else all_returns[0]
+        p75 = rets_sorted[int(len(rets_sorted)*0.75)] if len(rets_sorted)>=4 else all_returns[-1]
+        p90 = rets_sorted[int(len(rets_sorted)*0.9)] if len(rets_sorted)>=10 else all_returns[-1]
+
         return jsonify({
             "simulations": len(mc_results),
             "avg_daily_return": round(avg_return, 3),
@@ -2674,6 +2682,8 @@ def api_mean_reversion_backtest():
             "spy_baseline": round(spy_avg, 3),
             "outperform_pct": round(positive_pct, 1),
             "top_params": sorted(mc_results, key=lambda r: r["avg_return"], reverse=True)[:5],
+            "distribution": {"p10": round(p10,3), "p25": round(p25,3), "p50": round(p50,3), "p75": round(p75,3), "p90": round(p90,3)},
+            "all_simulations": sorted(mc_results, key=lambda r: r["avg_return"], reverse=True),
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
