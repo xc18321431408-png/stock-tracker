@@ -371,9 +371,10 @@ canvas{max-height:380px}
     <div style="font-size:12px;color:var(--muted);line-height:1.8">
       <p>1️⃣ 找出<b>60日跌幅最深</b>的板块（2~5个）</p>
       <p>2️⃣ 在这些板块里筛选个股：<b>RSI < 40</b></p>
-      <p>3️⃣ 且<b>前3天未涨</b>（横盘或续跌）</p>
-      <p>4️⃣ 买入，<b>持有1天</b>卖出</p>
-      <p>5️⃣ 随机参数 ± 随机日期采样</p>
+      <p>3️⃣ 且<b>成交量萎缩</b>（缩量下跌）</p>
+      <p>4️⃣ 且<b>前几天未涨</b>（横盘或续跌）</p>
+      <p>5️⃣ 买入，<b>持有1天</b>卖出</p>
+      <p>6️⃣ 随机参数 ± 随机日期采样</p>
     </div>
     <button onclick="runMeanReversion()" id="btnMR" style="width:100%;padding:14px;margin-top:16px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:15px;font-weight:700">🚀 开始回测 (约60秒)</button>
   </div>
@@ -1719,7 +1720,7 @@ async function runMeanReversion() {
     const topParams = d.top_params || [];
     let bestParamsHtml = '';
     topParams.forEach((p,i) => {
-      bestParamsHtml += '<tr><td>#'+(i+1)+'</td><td>底部'+p.params.bottom_n+'个</td><td>RSI<'+p.params.rsi_max+'</td><td style="color:'+(p.avg_return>=0?'var(--red)':'var(--green)')+'">'+(p.avg_return>=0?'+':'')+p.avg_return+'%</td><td>'+p.win_rate+'%</td><td>'+p.sharpe+'</td></tr>';
+      bestParamsHtml += '<tr><td>#'+(i+1)+'</td><td>底部'+p.params.bottom_n+'个</td><td>RSI<'+p.params.rsi_max+'</td><td>量<'+p.params.vol_thresh+'x</td><td>'+(p.params.flat_days||3)+'天平</td><td style="color:'+(p.avg_return>=0?'var(--red)':'var(--green)')+'">'+(p.avg_return>=0?'+':'')+p.avg_return+'%</td><td>'+p.win_rate+'%</td><td>'+p.sharpe+'</td></tr>';
     });
 
     el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">' +
@@ -1733,7 +1734,7 @@ async function runMeanReversion() {
       '<div style="text-align:center;background:var(--bg);border-radius:10px;padding:14px"><div style="font-size:11px;color:var(--muted)">SPY基准</div><div style="font-size:24px;font-weight:800;color:var(--muted)">'+(d.spy_baseline>=0?'+':'')+d.spy_baseline+'%</div></div>' +
       '</div>' +
       '<h4 style="font-size:13px;color:var(--accent);margin-bottom:8px">🏆 最优参数 Top 5</h4>' +
-      '<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="color:var(--muted);font-size:10px"><th style="text-align:left;padding:4px">#</th><th>筛选规则</th><th>RSI阈值</th><th>日均收益</th><th>胜率</th><th>夏普</th></tr>' + bestParamsHtml + '</table>' +
+      '<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="color:var(--muted);font-size:10px"><th style="text-align:left;padding:4px">#</th><th>板块</th><th>RSI</th><th>缩量</th><th>横盘</th><th>日均收益</th><th>胜率</th><th>夏普</th></tr>' + bestParamsHtml + '</table>' +
       '<p style="font-size:10px;color:var(--muted);text-align:center;margin-top:12px">⚠️ 历史回测不代表未来收益。本策略基于均值回归假设：超跌板块中的超卖个股存在短期反弹概率。' + d.simulations + '次蒙特卡洛模拟。</p>';
 
     btn.textContent = '✅ 回测完成'; btn.disabled = false;
