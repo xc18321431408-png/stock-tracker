@@ -1735,13 +1735,37 @@ async function runMeanReversion() {
       '</div>' +
       '<h4 style="font-size:13px;color:var(--accent);margin-bottom:8px">🏆 最优参数 Top 5</h4>' +
       '<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="color:var(--muted);font-size:10px"><th style="text-align:left;padding:4px">#</th><th>板块</th><th>RSI</th><th>缩量</th><th>横盘</th><th>日均收益</th><th>胜率</th><th>夏普</th></tr>' + bestParamsHtml + '</table>' +
-      '<p style="font-size:10px;color:var(--muted);text-align:center;margin-top:12px">⚠️ 历史回测不代表未来收益。本策略基于均值回归假设：超跌板块中的超卖个股存在短期反弹概率。' + d.simulations + '次蒙特卡洛模拟。</p>';
+      '<p style="font-size:10px;color:var(--muted);text-align:center;margin-top:12px">⚠️ 历史回测不代表未来收益。本策略基于均值回归假设：超跌板块中的超卖个股存在短期反弹概率。' + d.simulations + '次蒙特卡洛模拟。</p>' +
+      '<div style="text-align:center;margin-top:10px"><button onclick="downloadBacktestCSV()" style="padding:8px 20px;background:var(--accent);border:none;color:#fff;border-radius:6px;cursor:pointer;font-size:13px">📥 下载完整回测数据 (CSV)</button></div>';
 
+    // Store data for download
+    window._backtestData = d;
     btn.textContent = '✅ 回测完成'; btn.disabled = false;
   } catch(e) {
     el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">❌ ' + e.message + '</p>';
     btn.textContent = '🚀 重试'; btn.disabled = false;
   }
+}
+
+function downloadBacktestCSV() {
+  const d = window._backtestData;
+  if (!d) return;
+  let csv = 'Sim,AvgReturn%,WinRate%,Sharpe,BottomN,RSI_Max,VolThresh,FlatDays\n';
+  // Best guess: we have aggregated data, create from summary
+  csv += 'Summary,' + d.avg_daily_return + ',' + d.win_rate + ',' + d.sharpe_avg + ',,,\n';
+  csv += 'SPY_Baseline,' + d.spy_baseline + ',,,,,\n';
+  csv += 'Simulations,' + d.simulations + ',,,,,\n';
+  csv += '\nTopParams:\n';
+  if (d.top_params) {
+    d.top_params.forEach((p, i) => {
+      csv += [i+1, p.avg_return, p.win_rate, p.sharpe, p.params.bottom_n, p.params.rsi_max, p.params.vol_thresh, p.params.flat_days].join(',') + '\n';
+    });
+  }
+  const blob = new Blob(['﻿' + csv], {type: 'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'backtest_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click(); URL.revokeObjectURL(url);
 }
 
 // ── Quant Backtest (Legacy) ──
