@@ -2481,6 +2481,7 @@ def api_mean_reversion_backtest():
 
         # Get stock prices for all sector stocks (cached from screener data)
         stock_prices = {}  # {symbol: {date: close}}
+        stock_volumes = {}  # {symbol: {date: volume}}
         symbols_to_fetch = set()
         for sector_name, stocks in SECTOR_STOCKS.items():
             for info in stocks[:5]: symbols_to_fetch.add(info[0])
@@ -2493,13 +2494,17 @@ def api_mean_reversion_backtest():
                 if resp.status_code != 200: continue
                 r = resp.json().get('chart',{}).get('result',[None])[0]
                 if not r: continue
-                timestamps = r.get('timestamp',[]); closes = r.get('indicators',{}).get('quote',[{}])[0].get('close',[])
-                prices = {}
+                timestamps = r.get('timestamp',[])
+                quotes = r.get('indicators',{}).get('quote',[{}])[0]
+                closes = quotes.get('close',[]); volumes = quotes.get('volume',[])
+                prices = {}; vols = {}
                 for i in range(len(timestamps)):
-                    if closes[i] is not None:
-                        dt = datetime.fromtimestamp(timestamps[i]).strftime('%Y-%m-%d')
-                        prices[dt] = closes[i]
-                if len(prices) >= 50: stock_prices[sym] = prices
+                    dt = datetime.fromtimestamp(timestamps[i]).strftime('%Y-%m-%d')
+                    if closes[i] is not None: prices[dt] = closes[i]
+                    if volumes[i] is not None: vols[dt] = volumes[i]
+                if len(prices) >= 50:
+                    stock_prices[sym] = prices
+                    stock_volumes[sym] = vols
                 time.sleep(0.08)
             except: pass
         print(f"[Backtest] Got prices for {len(stock_prices)} stocks")
@@ -2569,8 +2574,16 @@ def api_mean_reversion_backtest():
                     rsi = 100 - 100/(1+ag/al) if al > 0 else 100
                     if rsi > rsi_max: continue
 
-                    # Volume check (use last day vol vs 20-day avg, approximate with closes)
-                    # Simplified: check if last 3 days are flat (not risen)
+                    # Volume check: current vol < 20-day avg * vol_thresh (缩量)
+                    vols_data = stock_volumes.get(sym, {})
+                    vol_dates = sorted(vols_data.keys())
+                    recent_vols = [vols_data[d] for d in vol_dates if d <= date_str]
+                    if len(recent_vols) >= 20:
+                        cur_vol = recent_vols[-1] or 0
+                        avg_vol = sum(v or 0 for v in recent_vols[-21:-1]) / 20
+                        if avg_vol > 0 and cur_vol / avg_vol > vol_thresh:
+                            continue  # Volume too high (not shrinking)
+                    # Check if last N days are flat (not risen)
                     if len(closes_vals) < flat_days + 1: continue
                     recent = closes_vals[-(flat_days+1):]
                     risen = recent[-1] > recent[0]
@@ -2591,6 +2604,8 @@ def api_mean_reversion_backtest():
             # Randomly sample parameters
             bottom_n = py_random.randint(2, 5)
             rsi_max = py_random.randint(30, 50)
+            vol_thresh = round(py_random.uniform(0.5, 1.2), 1)  # volume < avg * thresh = shrink
+            flat_days = py_random.randint(2, 5)
             # Randomly sample a subset of test dates
             sample_size = min(60, len(test_dates))
             sim_dates = py_random.sample(test_dates, sample_size)
@@ -2598,7 +2613,7 @@ def api_mean_reversion_backtest():
             sim_returns = []
             sim_wins = 0
             for date_str in sim_dates:
-                picks = find_picks(date_str, bottom_n=bottom_n, rsi_max=rsi_max)
+                picks = find_picks(date_str, bottom_n=bottom_n, rsi_max=rsi_max, vol_thresh=vol_thresh, flat_days=flat_days)
                 if not picks: continue
                 # Find next trading day
                 date_idx = all_dates.index(date_str) if date_str in all_dates else -1
@@ -2623,7 +2638,7 @@ def api_mean_reversion_backtest():
                     "sim": sim+1, "avg_return": round(avg, 3),
                     "win_rate": round(sim_wins/len(sim_returns)*100, 1),
                     "sharpe": round(sharpe, 2), "n_trades": len(sim_returns),
-                    "params": {"bottom_n": bottom_n, "rsi_max": rsi_max}
+                    "params": {"bottom_n": bottom_n, "rsi_max": rsi_max, "vol_thresh": vol_thresh, "flat_days": flat_days}
                 })
 
         if not mc_results: return jsonify({"error": "no valid simulations"}), 500
