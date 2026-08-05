@@ -2659,7 +2659,7 @@ async function showCompareChart() {
 }
 
 // ── Init ──
-updateParams();
+if (document.getElementById('btStrategy')) updateParams();
 loadDates().then(() => {
   updateDateNavUI();
   loadDashboard();
