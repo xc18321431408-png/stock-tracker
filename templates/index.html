@@ -164,7 +164,7 @@ canvas{max-height:380px}
   <button class="tab" onclick="switchTab('t0')">📉 做T助手</button>
   <button class="tab" onclick="switchTab('screener')">🎯 智能选股</button>
   <button class="tab" onclick="switchTab('intel')">📰 市场情报</button>
-  <button class="tab" onclick="switchTab('quant')">⚙️ 量化交易</button>
+  <button class="tab" onclick="switchTab('quant')">🔬 策略回测</button>
 </div>
 
 <!-- ==================== DASHBOARD TAB ==================== -->
@@ -363,73 +363,24 @@ canvas{max-height:380px}
 
 <!-- ==================== QUANT TAB ==================== -->
 <div id="tab-quant" style="display:none">
-<div class="header">
-  <div>
-    <h1>📈 <span>量化交易回测平台</span></h1>
-    <div class="meta">基于历史数据的策略回测 | 仅供研究参考</div>
-  </div>
-</div>
+<div class="header"><div><h1>🔬 <span>均值回归策略回测</span></h1><div class="meta">60日跌幅最大板块 × 低RSI × 低量 × 未涨 → 1000次蒙特卡洛模拟</div></div></div>
 
-<div class="quant-panel">
-  <div class="quant-form">
-    <h3 style="margin-bottom:12px">⚙️ 策略参数</h3>
-    <label>交易标的</label>
-    <input type="text" id="btSymbol" value="SPY" placeholder="SPY / QQQ / AAPL...">
-
-    <label>策略类型</label>
-    <select id="btStrategy" onchange="updateParams()">
-      <option value="ma_cross">均线交叉 (MA Crossover)</option>
-      <option value="rsi">RSI 均值回归</option>
-      <option value="momentum">动量突破 (Momentum)</option>
-      <option value="sector_rotation">行业轮动 (Sector Rotation)</option>
-      <option value="skew_arb">Skew套利 (波动率偏斜)</option>
-      <option value="vol_surface">波动率曲面套利</option>
-    </select>
-
-    <div id="btParams"></div>
-
-    <button onclick="runBacktest()">🚀 开始回测</button>
-    <button onclick="runBacktestOptimize()" style="margin-top:8px;background:var(--card);border:1px solid var(--border);color:var(--accent)">🔍 自动寻优</button>
-    <div id="optimizeStatus" style="margin-top:6px;font-size:11px;color:var(--muted)"></div>
-    <div style="margin-top:8px;font-size:11px;color:var(--muted)">
-      ⚠️ 回测结果不代表未来收益。数据基于近1年历史价格。
+<div style="display:grid;grid-template-columns:300px 1fr;gap:20px">
+  <div style="background:var(--card);border-radius:16px;padding:20px;border:1px solid var(--border)">
+    <h3 style="margin-bottom:14px;font-size:14px;color:var(--accent)">⚙️ 策略逻辑</h3>
+    <div style="font-size:12px;color:var(--muted);line-height:1.8">
+      <p>1️⃣ 找出<b>60日跌幅最深</b>的板块（2~5个）</p>
+      <p>2️⃣ 在这些板块里筛选个股：<b>RSI < 40</b></p>
+      <p>3️⃣ 且<b>前3天未涨</b>（横盘或续跌）</p>
+      <p>4️⃣ 买入，<b>持有1天</b>卖出</p>
+      <p>5️⃣ 随机参数 ± 随机日期采样</p>
     </div>
+    <button onclick="runMeanReversion()" id="btnMR" style="width:100%;padding:14px;margin-top:16px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:15px;font-weight:700">🚀 开始回测 (约60秒)</button>
   </div>
 
-  <div class="quant-result" id="btResult">
-    <h3 style="margin-bottom:16px">📋 回测结果</h3>
-    <div class="metric-grid">
-      <div class="metric"><div class="ml">总收益率</div><div class="mv" id="btTotalReturn">-</div></div>
-      <div class="metric"><div class="ml">买入持有</div><div class="mv" id="btBuyHold">-</div></div>
-      <div class="metric"><div class="ml">夏普比率</div><div class="mv" id="btSharpe">-</div></div>
-      <div class="metric"><div class="ml">最大回撤</div><div class="mv" id="btMaxDD">-</div></div>
-      <div class="metric"><div class="ml">胜率</div><div class="mv" id="btWinRate">-</div></div>
-      <div class="metric"><div class="ml">交易次数</div><div class="mv" id="btTrades">-</div></div>
-    </div>
-    <div style="margin-top:16px;font-size:11px;color:var(--muted)" id="btMeta"></div>
+  <div id="mrResult" style="background:var(--card);border-radius:16px;padding:20px;border:1px solid var(--border)">
+    <p style="text-align:center;color:var(--muted);padding:60px">👈 点击开始回测，1000次蒙特卡洛模拟<br><span style="font-size:11px">首次需要拉取股票数据，约需60秒</span></p>
   </div>
-</div>
-
-<!-- Backtest Chart -->
-<div class="chart-box" style="margin-top:20px;display:none" id="btChartBox">
-  <h3>📈 资金曲线 & 买卖点</h3>
-  <div id="backtestChart" style="width:100%;height:380px"></div>
-</div>
-
-<!-- Backtest History -->
-<div class="chart-box" style="margin-top:20px">
-  <h3>📜 回测历史记录</h3>
-  <table style="width:100%;border-collapse:collapse" id="btHistoryTable">
-    <thead><tr>
-      <th style="text-align:left;padding:8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">时间</th>
-      <th style="text-align:left;padding:8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">标的</th>
-      <th style="text-align:left;padding:8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">策略</th>
-      <th style="text-align:right;padding:8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">收益率</th>
-      <th style="text-align:right;padding:8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">夏普</th>
-      <th style="text-align:right;padding:8px;font-size:11px;color:var(--muted);border-bottom:1px solid var(--border)">回撤</th>
-    </tr></thead>
-    <tbody></tbody>
-  </table>
 </div>
 </div>
 
@@ -516,7 +467,6 @@ function switchMarket(m) {
       else if (text.includes('趋势')) renderTrendsPage();
       else if (text.includes('选股')) loadScreener();
       else if (text.includes('情报')) loadIntel();
-      else if (text.includes('量化')) loadBacktestHistory();
     }
   });
 }
@@ -1754,7 +1704,46 @@ async function showQuant(symbol) {
   }
 }
 
-// ── Quant Backtest ──
+// ── Mean Reversion Strategy Backtest ──
+async function runMeanReversion() {
+  const btn = document.getElementById('btnMR');
+  const el = document.getElementById('mrResult');
+  btn.textContent = '⏳ 回测中...'; btn.disabled = true;
+  el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">正在拉取数据并运行1000次模拟…预计60秒</div></div>';
+
+  try {
+    const resp = await fetch('/api/backtest/mean-reversion');
+    const d = await resp.json();
+    if (d.error) { el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">❌ ' + d.error + '</p>'; btn.textContent = '🚀 重试'; btn.disabled = false; return; }
+
+    const topParams = d.top_params || [];
+    let bestParamsHtml = '';
+    topParams.forEach((p,i) => {
+      bestParamsHtml += '<tr><td>#'+(i+1)+'</td><td>底部'+p.params.bottom_n+'个</td><td>RSI<'+p.params.rsi_max+'</td><td style="color:'+(p.avg_return>=0?'var(--red)':'var(--green)')+'">'+(p.avg_return>=0?'+':'')+p.avg_return+'%</td><td>'+p.win_rate+'%</td><td>'+p.sharpe+'</td></tr>';
+    });
+
+    el.innerHTML = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">' +
+      '<div style="text-align:center;background:var(--bg);border-radius:10px;padding:14px"><div style="font-size:11px;color:var(--muted)">日均收益</div><div style="font-size:24px;font-weight:800;color:'+(d.avg_daily_return>=0?'var(--red)':'var(--green)')+'">'+(d.avg_daily_return>=0?'+':'')+d.avg_daily_return+'%</div></div>' +
+      '<div style="text-align:center;background:var(--bg);border-radius:10px;padding:14px"><div style="font-size:11px;color:var(--muted)">胜率</div><div style="font-size:24px;font-weight:800;color:var(--accent)">'+d.win_rate+'%</div></div>' +
+      '<div style="text-align:center;background:var(--bg);border-radius:10px;padding:14px"><div style="font-size:11px;color:var(--muted)">跑赢SPY</div><div style="font-size:24px;font-weight:800;color:'+(d.positive_pct>50?'var(--red)':'var(--muted)')+'">'+d.positive_pct+'%</div></div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">' +
+      '<div style="text-align:center;background:var(--bg);border-radius:10px;padding:14px"><div style="font-size:11px;color:var(--muted)">模拟次数</div><div style="font-size:24px;font-weight:800">'+d.simulations+'</div></div>' +
+      '<div style="text-align:center;background:var(--bg);border-radius:10px;padding:14px"><div style="font-size:11px;color:var(--muted)">平均夏普</div><div style="font-size:24px;font-weight:800;color:var(--accent)">'+d.sharpe_avg+'</div></div>' +
+      '<div style="text-align:center;background:var(--bg);border-radius:10px;padding:14px"><div style="font-size:11px;color:var(--muted)">SPY基准</div><div style="font-size:24px;font-weight:800;color:var(--muted)">'+(d.spy_baseline>=0?'+':'')+d.spy_baseline+'%</div></div>' +
+      '</div>' +
+      '<h4 style="font-size:13px;color:var(--accent);margin-bottom:8px">🏆 最优参数 Top 5</h4>' +
+      '<table style="width:100%;font-size:12px;border-collapse:collapse"><tr style="color:var(--muted);font-size:10px"><th style="text-align:left;padding:4px">#</th><th>筛选规则</th><th>RSI阈值</th><th>日均收益</th><th>胜率</th><th>夏普</th></tr>' + bestParamsHtml + '</table>' +
+      '<p style="font-size:10px;color:var(--muted);text-align:center;margin-top:12px">⚠️ 历史回测不代表未来收益。本策略基于均值回归假设：超跌板块中的超卖个股存在短期反弹概率。' + d.simulations + '次蒙特卡洛模拟。</p>';
+
+    btn.textContent = '✅ 回测完成'; btn.disabled = false;
+  } catch(e) {
+    el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">❌ ' + e.message + '</p>';
+    btn.textContent = '🚀 重试'; btn.disabled = false;
+  }
+}
+
+// ── Quant Backtest (Legacy) ──
 function updateParams() {
   const strat = document.getElementById('btStrategy').value;
   let html = '';

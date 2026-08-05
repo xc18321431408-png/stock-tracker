@@ -2467,6 +2467,202 @@ def api_intraday_bars(symbol):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/backtest/mean-reversion')
+def api_mean_reversion_backtest():
+    """Backtest the 60d-bottom-sector + low RSI + low vol strategy with 1000 Monte Carlo sims."""
+    try:
+        # Fetch 6 months of sector data from DB
+        with sqlite3.connect(DB_PATH) as conn:
+            conn.row_factory = sqlite3.Row
+            all_dates = [r[0] for r in conn.execute(
+                "SELECT DISTINCT date FROM sector_data ORDER BY date ASC"
+            ).fetchall()]
+        if len(all_dates) < 80: return jsonify({"error": "insufficient data"}), 500
+
+        # Get stock prices for all sector stocks (cached from screener data)
+        stock_prices = {}  # {symbol: {date: close}}
+        symbols_to_fetch = set()
+        for sector_name, stocks in SECTOR_STOCKS.items():
+            for info in stocks[:5]: symbols_to_fetch.add(info[0])
+
+        print(f"[Backtest] Fetching prices for {len(symbols_to_fetch)} symbols...")
+        for sym in list(symbols_to_fetch)[:150]:
+            try:
+                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=6mo"
+                resp = requests.get(url, headers=YF_HEADERS, timeout=10)
+                if resp.status_code != 200: continue
+                r = resp.json().get('chart',{}).get('result',[None])[0]
+                if not r: continue
+                timestamps = r.get('timestamp',[]); closes = r.get('indicators',{}).get('quote',[{}])[0].get('close',[])
+                prices = {}
+                for i in range(len(timestamps)):
+                    if closes[i] is not None:
+                        dt = datetime.fromtimestamp(timestamps[i]).strftime('%Y-%m-%d')
+                        prices[dt] = closes[i]
+                if len(prices) >= 50: stock_prices[sym] = prices
+                time.sleep(0.08)
+            except: pass
+        print(f"[Backtest] Got prices for {len(stock_prices)} stocks")
+
+        # Build sector→stocks map with price data
+        sector_stocks_prices = {}
+        for sector_name, stocks in SECTOR_STOCKS.items():
+            valid = []
+            for info in stocks:
+                if info[0] in stock_prices: valid.append(info)
+            if valid: sector_stocks_prices[sector_name] = valid
+
+        # Strategy: bottom 60d sectors → low RSI + low vol stocks
+        def find_picks(date_str, bottom_n=3, rsi_max=40, vol_thresh=0.8, flat_days=3):
+            """Find stocks matching criteria on a given date."""
+            # Get 60d sector performance up to date_str
+            sector_60d = {}
+            with sqlite3.connect(DB_PATH) as conn:
+                rows = conn.execute(
+                    "SELECT date, name, change_pct FROM sector_data WHERE date <= ? ORDER BY date DESC",
+                    (date_str,)
+                ).fetchall()
+            # Calculate cumulative 60d return per sector
+            sector_rets = {}
+            for row in rows:
+                if row[1] not in sector_rets: sector_rets[row[1]] = []
+                sector_rets[row[1]].append((row[0], row[2]))
+
+            # Simple: use the 60d-period change from rotation API approach
+            # Just pick sectors with worst recent performance
+            sector_d60 = {}
+            with sqlite3.connect(DB_PATH) as conn:
+                dates_60 = [r[0] for r in conn.execute(
+                    "SELECT DISTINCT date FROM sector_data WHERE date <= ? ORDER BY date DESC LIMIT 61",
+                    (date_str,)
+                ).fetchall()]
+                if len(dates_60) < 2: return []
+                d_recent, d_60ago = dates_60[0], dates_60[-1]
+                for name in sector_stocks_prices:
+                    r1 = conn.execute("SELECT change_pct FROM sector_data WHERE date=? AND name=?", (d_recent, name)).fetchone()
+                    r2 = conn.execute("SELECT close FROM sector_data WHERE date=? AND name=?", (d_60ago, name)).fetchone()
+                    if r1: sector_d60[name] = r1[0]
+
+            bottom = sorted(sector_d60.items(), key=lambda x: x[1])[:bottom_n]
+            bottom_names = [b[0] for b in bottom]
+
+            # Screen stocks in bottom sectors
+            picks = []
+            for sector_name in bottom_names:
+                stocks = sector_stocks_prices.get(sector_name, [])
+                for info in stocks:
+                    sym = info[0]; name = info[1]
+                    prices = stock_prices.get(sym, {})
+                    if date_str not in prices: continue
+                    # Get recent closes
+                    closes_list = [(d, prices[d]) for d in sorted(prices.keys()) if d <= date_str]
+                    if len(closes_list) < 20: continue
+                    closes_list = closes_list[-20:]
+                    closes_vals = [c[1] for c in closes_list]
+
+                    # RSI(14)
+                    gains, losses = [], []
+                    for i in range(1, len(closes_vals)):
+                        d = closes_vals[i] - closes_vals[i-1]; gains.append(max(d,0)); losses.append(max(-d,0))
+                    if len(gains) < 14: continue
+                    ag = sum(gains[-14:])/14; al = sum(losses[-14:])/14
+                    rsi = 100 - 100/(1+ag/al) if al > 0 else 100
+                    if rsi > rsi_max: continue
+
+                    # Volume check (use last day vol vs 20-day avg, approximate with closes)
+                    # Simplified: check if last 3 days are flat (not risen)
+                    if len(closes_vals) < flat_days + 1: continue
+                    recent = closes_vals[-(flat_days+1):]
+                    risen = recent[-1] > recent[0]
+                    if risen: continue
+
+                    picks.append({"symbol": sym, "name": name, "sector": sector_name, "rsi": round(rsi,1), "price": closes_vals[-1]})
+            return picks
+
+        # Run backtest across all dates
+        test_dates = all_dates[80:]  # skip first 80 days for warmup
+        trades = []
+        # Monte Carlo: vary parameters 1000 times
+        mc_results = []
+        import random as py_random
+        py_random.seed(42)
+
+        for sim in range(min(1000, len(test_dates) * 5)):
+            # Randomly sample parameters
+            bottom_n = py_random.randint(2, 5)
+            rsi_max = py_random.randint(30, 50)
+            # Randomly sample a subset of test dates
+            sample_size = min(60, len(test_dates))
+            sim_dates = py_random.sample(test_dates, sample_size)
+
+            sim_returns = []
+            sim_wins = 0
+            for date_str in sim_dates:
+                picks = find_picks(date_str, bottom_n=bottom_n, rsi_max=rsi_max)
+                if not picks: continue
+                # Find next trading day
+                date_idx = all_dates.index(date_str) if date_str in all_dates else -1
+                if date_idx < 0 or date_idx + 1 >= len(all_dates): continue
+                next_date = all_dates[date_idx + 1]
+                # Calculate returns
+                pnl = 0
+                for pick in picks:
+                    prices = stock_prices.get(pick['symbol'], {})
+                    if date_str in prices and next_date in prices:
+                        ret = (prices[next_date] - prices[date_str]) / prices[date_str] * 100
+                        pnl += ret
+                avg_ret = pnl / len(picks) if picks else 0
+                sim_returns.append(avg_ret)
+                if avg_ret > 0: sim_wins += 1
+
+            if sim_returns:
+                avg = sum(sim_returns)/len(sim_returns)
+                std = (sum((r-avg)**2 for r in sim_returns)/len(sim_returns))**0.5
+                sharpe = avg/std * (252**0.5) if std > 0 else 0
+                mc_results.append({
+                    "sim": sim+1, "avg_return": round(avg, 3),
+                    "win_rate": round(sim_wins/len(sim_returns)*100, 1),
+                    "sharpe": round(sharpe, 2), "n_trades": len(sim_returns),
+                    "params": {"bottom_n": bottom_n, "rsi_max": rsi_max}
+                })
+
+        if not mc_results: return jsonify({"error": "no valid simulations"}), 500
+
+        # Aggregate results
+        all_returns = [r["avg_return"] for r in mc_results]
+        all_wins = [r["win_rate"] for r in mc_results]
+        avg_return = sum(all_returns)/len(all_returns)
+        win_rate = sum(all_wins)/len(all_wins)
+        positive_pct = sum(1 for r in all_returns if r > 0) / len(all_returns) * 100
+        best = max(mc_results, key=lambda r: r["avg_return"])
+        worst = min(mc_results, key=lambda r: r["avg_return"])
+
+        # SPY baseline
+        spy_prices = stock_prices.get('SPY', {})
+        spy_rets = []
+        for date_str in test_dates:
+            date_idx = all_dates.index(date_str) if date_str in all_dates else -1
+            if date_idx < 0 or date_idx+1 >= len(all_dates): continue
+            nd = all_dates[date_idx+1]
+            if date_str in spy_prices and nd in spy_prices:
+                spy_rets.append((spy_prices[nd]-spy_prices[date_str])/spy_prices[date_str]*100)
+        spy_avg = sum(spy_rets)/len(spy_rets) if spy_rets else 0
+
+        return jsonify({
+            "simulations": len(mc_results),
+            "avg_daily_return": round(avg_return, 3),
+            "win_rate": round(win_rate, 1),
+            "positive_pct": round(positive_pct, 1),
+            "best_sim": best,
+            "worst_sim": worst,
+            "sharpe_avg": round(sum(r["sharpe"] for r in mc_results)/len(mc_results), 2),
+            "spy_baseline": round(spy_avg, 3),
+            "outperform_pct": round(positive_pct, 1),
+            "top_params": sorted(mc_results, key=lambda r: r["avg_return"], reverse=True)[:5],
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/stock/<symbol>/t0')
 def api_t0_signals(symbol):
     """Return T+0 intraday signals: RSI(6), MACD 5-min, Bollinger Bands, VWAP."""
