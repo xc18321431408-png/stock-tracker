@@ -1675,7 +1675,7 @@ def fetch_stock_quotes(stock_list):
                 if r_d:
                     cd = r_d.get('indicators', {}).get('quote', [{}])[0].get('close', [])
                     vd = [c for c in cd if c is not None]
-                    if len(vd) >= 2: prev_close = vd[-2]
+                    if len(vd) >= 1: prev_close = vd[-1]  # latest daily close as baseline
             # Get current price from 1-minute data (includes after-hours)
             url_1m = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1m&range=1d&includePrePost=true"
             resp = requests.get(url_1m, headers=YF_HEADERS, timeout=10)
@@ -3078,6 +3078,22 @@ def api_stock_technicals(symbol):
                 "next_refresh": (datetime.now().replace(day=1) + timedelta(days=32)).replace(day=1).strftime('%Y-%m-%d'),
             }
         }
+        # Get current live price (including after-hours)
+        try:
+            url_1m = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1m&range=1d&includePrePost=true"
+            resp_1m = requests.get(url_1m, headers=YF_HEADERS, timeout=8)
+            if resp_1m.status_code == 200:
+                d1m = resp_1m.json()
+                r1m = d1m.get('chart', {}).get('result', [None])[0]
+                if r1m:
+                    c1m = r1m.get('indicators', {}).get('quote', [{}])[0].get('close', [])
+                    v1m = [c for c in c1m if c is not None]
+                    if v1m:
+                        last_close = closes[-1] if closes else 0
+                        resp_data['current_price'] = round(v1m[-1], 2)
+                        resp_data['current_change'] = round((v1m[-1] - last_close) / last_close * 100, 2) if last_close else 0
+        except: pass
+
         # Cache until next month
         _technicals_cache[symbol.upper()] = (time.time(), resp_data)
         return jsonify(resp_data)
