@@ -2484,16 +2484,15 @@ def api_mean_reversion_backtest():
         stock_volumes = {}  # {symbol: {date: volume}}
         symbols_to_fetch = set()
         for sector_name, stocks in SECTOR_STOCKS.items():
-            for info in stocks[:5]: symbols_to_fetch.add(info[0])
+            for info in stocks[:3]: symbols_to_fetch.add(info[0])  # top 3 per sector
 
-        print(f"[Backtest] Fetching prices for {len(symbols_to_fetch)} symbols...")
-        for sym in list(symbols_to_fetch)[:150]:
+        def _fetch_one_stock(sym):
             try:
                 url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=6mo"
                 resp = requests.get(url, headers=YF_HEADERS, timeout=10)
-                if resp.status_code != 200: continue
+                if resp.status_code != 200: return None
                 r = resp.json().get('chart',{}).get('result',[None])[0]
-                if not r: continue
+                if not r: return None
                 timestamps = r.get('timestamp',[])
                 quotes = r.get('indicators',{}).get('quote',[{}])[0]
                 closes = quotes.get('close',[]); volumes = quotes.get('volume',[])
@@ -2502,11 +2501,19 @@ def api_mean_reversion_backtest():
                     dt = datetime.fromtimestamp(timestamps[i]).strftime('%Y-%m-%d')
                     if closes[i] is not None: prices[dt] = closes[i]
                     if volumes[i] is not None: vols[dt] = volumes[i]
-                if len(prices) >= 50:
+                return (sym, prices, vols) if len(prices) >= 50 else None
+            except: return None
+
+        syms = list(symbols_to_fetch)[:100]
+        print(f"[Backtest] Fetching {len(syms)} symbols in parallel...")
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            futures = {executor.submit(_fetch_one_stock, sym): sym for sym in syms}
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+                if result:
+                    sym, prices, vols = result
                     stock_prices[sym] = prices
                     stock_volumes[sym] = vols
-                time.sleep(0.08)
-            except: pass
         print(f"[Backtest] Got prices for {len(stock_prices)} stocks")
 
         # Build sector→stocks map with price data
@@ -2600,14 +2607,15 @@ def api_mean_reversion_backtest():
         import random as py_random
         py_random.seed(42)
 
-        for sim in range(min(1000, len(test_dates) * 5)):
+        n_sims = min(500, len(test_dates) * 3)
+        for sim in range(n_sims):
             # Randomly sample parameters
             bottom_n = py_random.randint(2, 5)
             rsi_max = py_random.randint(30, 50)
-            vol_thresh = round(py_random.uniform(0.5, 1.2), 1)  # volume < avg * thresh = shrink
+            vol_thresh = round(py_random.uniform(0.5, 1.2), 1)
             flat_days = py_random.randint(2, 5)
             # Randomly sample a subset of test dates
-            sample_size = min(60, len(test_dates))
+            sample_size = min(40, len(test_dates))
             sim_dates = py_random.sample(test_dates, sample_size)
 
             sim_returns = []

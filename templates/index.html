@@ -363,7 +363,7 @@ canvas{max-height:380px}
 
 <!-- ==================== QUANT TAB ==================== -->
 <div id="tab-quant" style="display:none">
-<div class="header"><div><h1>🔬 <span>均值回归策略回测</span></h1><div class="meta">60日跌幅最大板块 × 低RSI × 低量 × 未涨 → 1000次蒙特卡洛模拟</div></div></div>
+<div class="header"><div><h1>🔬 <span>均值回归策略回测</span></h1><div class="meta">60日跌幅最大板块 × 低RSI × 低量 × 未涨 → 500次蒙特卡洛模拟</div></div></div>
 
 <div style="display:grid;grid-template-columns:300px 1fr;gap:20px">
   <div style="background:var(--card);border-radius:16px;padding:20px;border:1px solid var(--border)">
@@ -380,7 +380,7 @@ canvas{max-height:380px}
   </div>
 
   <div id="mrResult" style="background:var(--card);border-radius:16px;padding:20px;border:1px solid var(--border)">
-    <p style="text-align:center;color:var(--muted);padding:60px">👈 点击开始回测，1000次蒙特卡洛模拟<br><span style="font-size:11px">首次需要拉取股票数据，约需60秒</span></p>
+    <p style="text-align:center;color:var(--muted);padding:60px">👈 点击开始回测，500次蒙特卡洛模拟<br><span style="font-size:11px">首次需要拉取股票数据，约需20-30秒</span></p>
   </div>
 </div>
 </div>
@@ -1710,7 +1710,7 @@ async function runMeanReversion() {
   const btn = document.getElementById('btnMR');
   const el = document.getElementById('mrResult');
   btn.textContent = '⏳ 回测中...'; btn.disabled = true;
-  el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">正在拉取数据并运行1000次模拟…预计60秒</div></div>';
+  el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">正在拉取数据并运行1000次模拟…约20-30秒</div></div>';
 
   try {
     const resp = await fetch('/api/backtest/mean-reversion');
@@ -1769,7 +1769,7 @@ function downloadBacktestCSV() {
     csv += 'P90收益(%),' + d.distribution.p90 + '\n';
   }
 
-  csv += '\n=== 1000次蒙特卡洛模拟明细 ===\n';
+  csv += '\n=== 500次蒙特卡洛模拟明细 ===\n';
   csv += '排名,日均收益(%),胜率(%),夏普,交易次数,板块数,RSI阈值,缩量倍,横盘天数\n';
   if (d.all_simulations) {
     d.all_simulations.forEach((r, i) => {
