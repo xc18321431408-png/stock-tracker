@@ -1660,35 +1660,43 @@ def fetch_sector_data(target_date=None):
     return results
 
 def fetch_stock_quotes(stock_list):
-    """Fetch real-time quotes for individual stocks via v8 chart API."""
+    """Fetch current stock prices including after-hours via 1-minute Yahoo data."""
     results = []
-
-    # Fallback: v8 chart API for any missing symbols
-    fetched = {r['symbol'] for r in results}
     for item in stock_list:
-        sym = item[0]
-        if sym in fetched: continue
-        name, desc = item[1] if len(item)>1 else sym, item[2] if len(item)>2 else ""
+        sym, name, desc = item[0], item[1] if len(item)>1 else sym, item[2] if len(item)>2 else ""
         try:
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
-            resp = requests.get(url, headers=YF_HEADERS, timeout=10)
-            if resp.status_code != 200: continue
-            data = resp.json()
-            r = data.get('chart', {}).get('result', [None])[0]
-            if not r: continue
-            closes = r.get('indicators', {}).get('quote', [{}])[0].get('close', [])
-            valid = [c for c in closes if c is not None]
-            if len(valid) < 2: continue
-            close, prev_close = valid[-1], valid[-2]
-            change_pct = ((close - prev_close) / prev_close) * 100 if prev_close else 0
-            results.append({
-                'symbol': sym, 'name': name, 'desc': desc,
-                'close': round(close, 2), 'change_pct': round(change_pct, 2),
-                'volume': 0,
-            })
-            time.sleep(0.15)
+            current_price = None; prev_close = None
+            # Always get previous close from daily data (most accurate)
+            url_d = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
+            resp_d = requests.get(url_d, headers=YF_HEADERS, timeout=10)
+            if resp_d.status_code == 200:
+                data_d = resp_d.json()
+                r_d = data_d.get('chart', {}).get('result', [None])[0]
+                if r_d:
+                    cd = r_d.get('indicators', {}).get('quote', [{}])[0].get('close', [])
+                    vd = [c for c in cd if c is not None]
+                    if len(vd) >= 2: prev_close = vd[-2]
+            # Get current price from 1-minute data (includes after-hours)
+            url_1m = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1m&range=1d&includePrePost=true"
+            resp = requests.get(url_1m, headers=YF_HEADERS, timeout=10)
+            if resp.status_code == 200:
+                data = resp.json()
+                r = data.get('chart', {}).get('result', [None])[0]
+                if r:
+                    c1m = r.get('indicators', {}).get('quote', [{}])[0].get('close', [])
+                    v1m = [c for c in c1m if c is not None]
+                    if v1m: current_price = v1m[-1]
+            # Fallback: use daily close if no 1m data
+            if not current_price and vd: current_price = vd[-1]
+            if current_price and prev_close and prev_close > 0:
+                results.append({
+                    'symbol': sym, 'name': name, 'desc': desc,
+                    'close': round(current_price, 2),
+                    'change_pct': round((current_price - prev_close) / prev_close * 100, 2),
+                    'volume': 0,
+                })
+            time.sleep(0.1)
         except: pass
-
     return sorted(results, key=lambda x: x['change_pct'], reverse=True)
 
 def save_to_db(data, target_date):
