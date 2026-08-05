@@ -2607,7 +2607,7 @@ def api_mean_reversion_backtest():
         import random as py_random
         py_random.seed(42)
 
-        n_sims = min(500, len(test_dates) * 3)
+        n_sims = 500
         for sim in range(n_sims):
             # Randomly sample parameters
             bottom_n = py_random.randint(2, 5)
