@@ -1709,13 +1709,28 @@ async function showQuant(symbol) {
 async function runMeanReversion() {
   const btn = document.getElementById('btnMR');
   const el = document.getElementById('mrResult');
-  btn.textContent = '⏳ 回测中...'; btn.disabled = true;
-  el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">正在拉取数据并运行1000次模拟…约20-30秒</div></div>';
+  btn.textContent = '⏳ 启动中...'; btn.disabled = true;
+  el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">启动后台任务…</div></div>';
 
   try {
-    const resp = await fetch('/api/backtest/mean-reversion');
-    const d = await resp.json();
-    if (d.error) { el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">❌ ' + d.error + '</p>'; btn.textContent = '🚀 重试'; btn.disabled = false; return; }
+    // Start the job (POST)
+    let resp = await fetch('/api/backtest/mean-reversion', { method: 'POST' });
+    let job = await resp.json();
+    if (job.error) { el.innerHTML = '<p style="color:var(--red);padding:40px">❌ ' + job.error + '</p>'; btn.textContent = '🚀 重试'; btn.disabled = false; return; }
+
+    // Poll until done
+    let waited = 0;
+    while (job.status === 'started' || job.status === 'running') {
+      waited += 3;
+      el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">回测运行中…已等待 ' + waited + ' 秒</div></div>';
+      await new Promise(r => setTimeout(r, 3000));
+      resp = await fetch('/api/backtest/mean-reversion');
+      job = await resp.json();
+    }
+
+    if (job.status === 'error' || job.error) { el.innerHTML = '<p style="color:var(--red);padding:40px">❌ ' + (job.error || '未知错误') + '</p>'; btn.textContent = '🚀 重试'; btn.disabled = false; return; }
+    const d = job.result;
+    if (!d || d.error) { el.innerHTML = '<p style="color:var(--red);padding:40px">❌ ' + (d?.error || '无结果') + '</p>'; btn.textContent = '🚀 重试'; btn.disabled = false; return; }
 
     const topParams = d.top_params || [];
     let bestParamsHtml = '';
