@@ -2474,8 +2474,9 @@ def _run_backtest_thread():
     global _bt_job
     _bt_job = {'status': 'running', 'result': None, 'error': None}
     try:
-        result = _do_backtest()
-        _bt_job = {'status': 'done', 'result': result, 'error': None}
+        with app.app_context():
+            result = _do_backtest()
+            _bt_job = {'status': 'done', 'result': result, 'error': None}
     except Exception as e:
         _bt_job = {'status': 'error', 'result': None, 'error': str(e)}
 
@@ -2671,7 +2672,7 @@ def _do_backtest():
                     "params": {"bottom_n": bottom_n, "rsi_max": rsi_max, "vol_thresh": vol_thresh, "flat_days": flat_days}
                 })
 
-        if not mc_results: return jsonify({"error": "no valid simulations"}), 500
+        if not mc_results: return {"error": "no valid simulations"}
 
         # Aggregate results
         all_returns = [r["avg_return"] for r in mc_results]
@@ -2701,7 +2702,7 @@ def _do_backtest():
         p75 = rets_sorted[int(len(rets_sorted)*0.75)] if len(rets_sorted)>=4 else all_returns[-1]
         p90 = rets_sorted[int(len(rets_sorted)*0.9)] if len(rets_sorted)>=10 else all_returns[-1]
 
-        return jsonify({
+        return {
             "simulations": len(mc_results),
             "avg_daily_return": round(avg_return, 3),
             "win_rate": round(win_rate, 1),
@@ -2714,9 +2715,9 @@ def _do_backtest():
             "top_params": sorted(mc_results, key=lambda r: r["avg_return"], reverse=True)[:5],
             "distribution": {"p10": round(p10,3), "p25": round(p25,3), "p50": round(p50,3), "p75": round(p75,3), "p90": round(p90,3)},
             "all_simulations": sorted(mc_results, key=lambda r: r["avg_return"], reverse=True),
-        })
+        }
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return {"error": str(e)}
 
 @app.route('/api/stock/<symbol>/t0')
 def api_t0_signals(symbol):
