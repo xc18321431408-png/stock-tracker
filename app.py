@@ -2467,9 +2467,31 @@ def api_intraday_bars(symbol):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route('/api/backtest/mean-reversion')
+_bt_job = {'status': 'idle', 'result': None, 'error': None}
+
+def _run_backtest_thread():
+    """Run backtest in background thread."""
+    global _bt_job
+    _bt_job = {'status': 'running', 'result': None, 'error': None}
+    try:
+        result = _do_backtest()
+        _bt_job = {'status': 'done', 'result': result, 'error': None}
+    except Exception as e:
+        _bt_job = {'status': 'error', 'result': None, 'error': str(e)}
+
+@app.route('/api/backtest/mean-reversion', methods=['GET', 'POST'])
 def api_mean_reversion_backtest():
-    """Backtest the 60d-bottom-sector + low RSI + low vol strategy with 1000 Monte Carlo sims."""
+    """POST to start backtest job, GET to poll for results."""
+    global _bt_job
+    if request.method == 'POST':
+        if _bt_job['status'] == 'running':
+            return jsonify({"status": "running"})
+        threading.Thread(target=_run_backtest_thread, daemon=True).start()
+        return jsonify({"status": "started"})
+    return jsonify(_bt_job)
+
+def _do_backtest():
+    """Backtest the 60d-bottom-sector + low RSI + low vol strategy with MC sims."""
     try:
         # Fetch 6 months of sector data from DB
         with sqlite3.connect(DB_PATH) as conn:
