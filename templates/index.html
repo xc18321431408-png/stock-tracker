@@ -872,37 +872,58 @@ async function loadScreener() {
     const resp = await fetch(apiBase('/screener/us'));
     const data = await resp.json();
     const results = data.results || [];
-    if (!results.length) { el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px">暂无符合条件的股票，请稍后再试</p>'; return; }
+    const btResults = data.backtest || [];
 
-    let html = '<p style="font-size:11px;color:var(--muted);margin-bottom:12px">📅 更新时间：' + (data.updated||'').slice(0,16) + ' | 每日自动刷新 | 筛选逻辑：低RSI(超卖) + 高夏普(高效) + MACD上升 + 放量 + 布林带下轨附近</p>';
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px">';
+    let html = '';
 
-    for (const r of results) {
-      const rsiColor = r.rsi < 30 ? 'var(--green)' : r.rsi < 40 ? 'var(--accent)' : 'var(--gold)';
-      const sharpeColor = r.sharpe > 2 ? 'var(--red)' : r.sharpe > 1 ? 'var(--accent)' : 'var(--text)';
-      const volColor = r.vol_exp > 1.5 ? 'var(--red)' : r.vol_exp > 1.2 ? 'var(--accent)' : 'var(--muted)';
-      const bbIcon = r.bb_pos_pct != null && r.bb_pos_pct < 15 ? '🔴' : r.bb_pos_pct < 25 ? '🟡' : '⚪';
-
-      html += '<div style="background:var(--bg);border-radius:10px;padding:12px 14px;border:1px solid var(--border);border-left:4px solid ' + rsiColor + '">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">' +
-        '<span style="font-weight:700;font-size:14px;color:var(--accent)">' + r.symbol + '</span>' +
-        '<span style="font-size:11px;color:var(--muted)">' + r.sector + '</span>' +
-        '</div>' +
-        '<div style="font-size:12px;color:var(--text);margin-bottom:8px">' + r.name + ' | 💲' + r.close + '</div>' +
-        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px">' +
-        '<div style="text-align:center;background:rgba(0,0,0,0.15);border-radius:6px;padding:6px"><div style="color:var(--muted)">RSI</div><div style="font-weight:700;font-size:16px;color:' + rsiColor + '">' + r.rsi + '</div></div>' +
-        '<div style="text-align:center;background:rgba(0,0,0,0.15);border-radius:6px;padding:6px"><div style="color:var(--muted)">夏普</div><div style="font-weight:700;font-size:16px;color:' + sharpeColor + '">' + r.sharpe + '</div></div>' +
-        '<div style="text-align:center;background:rgba(0,0,0,0.15);border-radius:6px;padding:6px"><div style="color:var(--muted)">放量</div><div style="font-weight:700;font-size:16px;color:' + volColor + '">' + (r.vol_exp||0).toFixed(1) + 'x</div></div>' +
-        '</div>' +
-        '<div style="display:flex;gap:8px;margin-top:6px;font-size:11px;align-items:center">' +
-        '<span style="color:var(--muted)">MACD:</span><span style="color:' + (r.macd_uptrend?'var(--red)':'var(--green)') + '">' + (r.macd_uptrend?'📈 上升通道':'📉') + '</span>' +
-        '<span style="color:var(--muted);margin-left:4px">BB:</span><span>' + bbIcon + ' ' + (r.bb_pos_pct||'?') + '%</span>' +
-        '<span style="margin-left:auto;font-weight:700;font-size:14px;color:var(--gold)">⭐' + r.score + '</span>' +
-        '<button onclick="event.stopPropagation();quickAddWL(\'' + r.symbol + '\')" style="margin-left:6px;padding:3px 8px;background:var(--accent);border:none;color:#fff;border-radius:4px;cursor:pointer;font-size:10px;white-space:nowrap">➕ 自选</button>' +
-        '</div>' +
-        '</div>';
+    // ── Section 1: 综合评分选股 ──
+    html += '<div style="margin-bottom:24px">';
+    html += '<h3 style="margin-bottom:8px;color:var(--accent);font-size:16px">📊 综合评分选股</h3>';
+    html += '<p style="font-size:11px;color:var(--muted);margin-bottom:12px">📅 更新时间：' + (data.updated||'').slice(0,16) + ' | 筛选逻辑：低RSI(超卖) + 高夏普(高效) + MACD上升 + 放量 + 布林带下轨附近</p>';
+    if (!results.length) {
+      html += '<p style="color:var(--muted);text-align:center;padding:20px">暂无符合条件的股票</p>';
+    } else {
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px">';
+      for (const r of results.slice(0,12)) {
+        const rsiColor = r.rsi < 30 ? 'var(--green)' : r.rsi < 40 ? 'var(--accent)' : 'var(--gold)';
+        const sharpeColor = r.sharpe > 2 ? 'var(--red)' : r.sharpe > 1 ? 'var(--accent)' : 'var(--text)';
+        html += '<div style="background:var(--bg);border-radius:10px;padding:12px 14px;border:1px solid var(--border);border-left:4px solid ' + rsiColor + '">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-weight:700;font-size:14px;color:var(--accent)">' + r.symbol + '</span><span style="font-size:11px;color:var(--muted)">' + r.sector + '</span></div>' +
+          '<div style="font-size:12px;color:var(--text);margin-bottom:8px">' + r.name + ' | 💲' + r.close + '</div>' +
+          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px">' +
+          '<div style="text-align:center;background:rgba(0,0,0,0.15);border-radius:6px;padding:6px"><div style="color:var(--muted)">RSI</div><div style="font-weight:700;font-size:16px;color:' + rsiColor + '">' + r.rsi + '</div></div>' +
+          '<div style="text-align:center;background:rgba(0,0,0,0.15);border-radius:6px;padding:6px"><div style="color:var(--muted)">夏普</div><div style="font-weight:700;font-size:16px;color:' + sharpeColor + '">' + r.sharpe + '</div></div>' +
+          '<div style="text-align:center;background:rgba(0,0,0,0.15);border-radius:6px;padding:6px"><div style="color:var(--muted)">放量</div><div style="font-weight:700;font-size:16px;color:' + (r.vol_exp>1.5?'var(--red)':'var(--muted)') + '">' + (r.vol_exp||0).toFixed(1) + 'x</div></div>' +
+          '</div>' +
+          '<div style="display:flex;gap:8px;margin-top:6px;font-size:11px;align-items:center"><span style="color:var(--muted)">MACD:</span><span style="color:' + (r.macd_uptrend?'var(--red)':'var(--green)') + '">' + (r.macd_uptrend?'📈 上升':'📉') + '</span>' +
+          '<span style="margin-left:auto;font-weight:700;font-size:14px;color:var(--gold)">⭐' + r.score + '</span>' +
+          '<button onclick="event.stopPropagation();quickAddWL(\'' + r.symbol + '\')" style="margin-left:6px;padding:3px 8px;background:var(--accent);border:none;color:#fff;border-radius:4px;cursor:pointer;font-size:10px;white-space:nowrap">➕ 自选</button></div>' +
+          '</div>';
+      }
+      html += '</div>';
     }
     html += '</div>';
+
+    // ── Section 2: 回测策略选股 ──
+    html += '<div>';
+    html += '<h3 style="margin-bottom:8px;color:var(--gold);font-size:16px">🔬 回测策略选股</h3>';
+    html += '<p style="font-size:11px;color:var(--muted);margin-bottom:12px">筛选逻辑：均线交叉/RSI均值回归/动量突破/Skew套利/波动率曲面 — 最近一个交易日发出买入信号</p>';
+    if (!btResults.length) {
+      html += '<p style="color:var(--muted);text-align:center;padding:20px">暂无回测买入信号</p>';
+    } else {
+      html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">';
+      for (const r of btResults.slice(0,12)) {
+        html += '<div style="background:var(--bg);border-radius:10px;padding:12px 14px;border:1px solid var(--border);border-left:4px solid var(--accent)">' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-weight:700;font-size:14px;color:var(--accent)">' + r.symbol + '</span><span style="font-size:11px;color:var(--muted)">' + r.sector + '</span></div>' +
+          '<div style="font-size:12px;color:var(--text);margin-bottom:6px">' + r.name + ' | 💲' + r.price + '</div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px"><span style="color:var(--gold);font-weight:600">📡 ' + r.strategy + '</span>' +
+          '<span style="color:var(--muted)">回测收益: <b style="color:' + (r.total_return>0?'var(--red)':'var(--green)') + '">' + (r.total_return>0?'+':'') + r.total_return.toFixed(1) + '%</b></span></div>' +
+          '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+
     el.innerHTML = html;
   } catch(e) {
     el.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">加载失败: ' + e.message + '</p>';

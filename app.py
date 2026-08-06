@@ -2013,15 +2013,75 @@ def _run_screener(market='us'):
     filtered.sort(key=lambda x: x['score'], reverse=True)
     return filtered[:25]
 
+def _run_backtest_screener(market='us'):
+    """Run backtest strategies on top stocks, return those with buy signals."""
+    picks = []
+    strategies = [
+        {'name': '均线交叉', 'key': 'ma_cross', 'params': {'fast': 5, 'slow': 20}},
+        {'name': 'RSI均值回归', 'key': 'rsi', 'params': {'period': 14, 'oversold': 30, 'overbought': 70}},
+        {'name': '动量突破', 'key': 'momentum', 'params': {'lookback': 20}},
+        {'name': 'Skew套利', 'key': 'skew_arb', 'params': {'short_window': 5, 'long_window': 20, 'entry_ratio': 1.5}},
+        {'name': '波动率曲面', 'key': 'vol_surface', 'params': {'bb_period': 20, 'bb_std': 2.0, 'entry_thresh': 2.0}},
+    ]
+    symbols_processed = set()
+    sectors = SECTOR_STOCKS if market != 'cn' else CN_SECTOR_STOCKS
+
+    for sector_name, stocks in sectors.items():
+        for info in stocks[:3]:
+            sym = info[0]; name = info[1]
+            if sym in symbols_processed: continue
+            symbols_processed.add(sym)
+            try:
+                url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=1y"
+                resp = requests.get(url, headers=YF_HEADERS, timeout=10)
+                if resp.status_code != 200: continue
+                data = resp.json()
+                r = data.get('chart',{}).get('result',[None])[0]
+                if not r: continue
+                closes = [c for c in r.get('indicators',{}).get('quote',[{}])[0].get('close',[]) if c is not None]
+                if len(closes) < 60: continue
+                close = closes[-1]
+                for strat in strategies:
+                    result = run_backtest(closes, strat['key'], strat['params'])
+                    if not result or 'signals' not in result: continue
+                    signals = result['signals']
+                    if signals and signals[-1] == 1:
+                        picks.append({
+                            'symbol': sym, 'name': name, 'sector': sector_name,
+                            'strategy': strat['name'], 'price': round(close, 2),
+                            'total_return': result.get('total_return', 0),
+                            'sharpe': result.get('sharpe', 0),
+                        })
+                        break  # one signal per stock
+                time.sleep(0.1)
+            except: continue
+
+    picks.sort(key=lambda x: x.get('sharpe', 0), reverse=True)
+    return picks[:15]
+
 _screener_cache_cn = {'ts': 0, 'results': []}
+_bt_screener_cache = {'ts': 0, 'results': []}
 
 @app.route('/api/screener/us')
 def api_screener():
-    global _screener_cache
+    global _screener_cache, _bt_screener_cache
     now = time.time()
     if now - _screener_cache['ts'] < 86400:
-        return jsonify({"results": _screener_cache['results'], "updated": datetime.fromtimestamp(_screener_cache['ts']).isoformat()})
-    results = _run_screener('us')
+        results = _screener_cache['results']
+    else:
+        results = _run_screener('us')
+        _screener_cache = {'ts': now, 'results': results}
+    # Backtest screener (separate cache)
+    if now - _bt_screener_cache['ts'] < 86400:
+        bt_results = _bt_screener_cache['results']
+    else:
+        bt_results = _run_backtest_screener('us')
+        _bt_screener_cache = {'ts': now, 'results': bt_results}
+    return jsonify({
+        "results": results,
+        "backtest": bt_results,
+        "updated": datetime.fromtimestamp(_screener_cache['ts']).isoformat()
+    })
     _screener_cache = {'ts': now, 'results': results}
     return jsonify({"results": results, "updated": datetime.now().isoformat()})
 
