@@ -419,8 +419,8 @@ SUB_SECTORS = [
     ("医疗健康", "IBB", "生物科技"), ("医疗健康", "XBI", "生技"), ("医疗健康", "IHI", "医疗器械"),
     ("医疗健康", "XHE", "医疗设备"), ("医疗健康", "PJP", "制药"),
     # 能源 (XLE parent)
-    ("能源", "XOP", "油气勘探"), ("能源", "OIH", "油服"), ("能源", "TAN", "太阳能"),
-    ("能源", "FAN", "风能"), ("能源", "ICLN", "清洁能源"),
+    ("能源", "XOP", "油气勘探"), ("能源", "OIH", "油服"),
+    ("能源", "TAN", "太阳能"), ("能源", "FAN", "风能"), ("能源", "ICLN", "清洁能源"),
     # 工业 (XLI parent)
     ("工业", "ITA", "航空航天"), ("工业", "XAR", "国防军工"), ("工业", "PAVE", "基建工程"),
     # 消费 (XLY/XLP parents)
@@ -576,8 +576,13 @@ SECTOR_STOCKS = {
         ("PLUG","Plug Power","氢燃料电池+绿氢"), ("BE","Bloom Energy","固体氧化物燃料电池"),
         ("NEE","NextEra","全球最大风电/光伏运营商"), ("BEP","Brookfield Renewable","全球可再生能源基础设施"),
         ("CWEN","Clearway","美国清洁能源IPP"), ("AY","Atlantica","全球可再生能源资产"),        ("SEDG","SolarEdge","光伏逆变器+储能解决方案"),
-        ("RUN","Sunrun","美国最大户用光伏+储能安装商"),
-
+    ],
+    "煤炭": [
+        ("BTU","Peabody Energy","美国最大煤炭生产商"), ("ARCH","Arch Resources","冶金煤龙头，高炉炼钢必需"),
+        ("AMR","Alpha Metallurgical","美国最大冶金煤出口商"), ("CEIX","CONSOL Energy","宾州煤炭+天然气"),
+        ("HCC","Warrior Met Coal","纯冶金煤生产商"), ("ARLP","Alliance Resource","伊利诺伊盆地动力煤"),
+        ("NRP","Natural Resource Partners","煤炭矿区权益+特许权"), ("SXC","SunCoke Energy","焦炭生产商"),
+        ("METC","Ramaco Resources","冶金煤新锐"), ("NC","NACCO Industries","动力煤+多元化"),
     ],
     "航空航天": [
         ("BA","波音","全球最大航空航天公司，客机+军工"), ("RTX","雷神技术","普惠发动机+柯林斯航空+导弹"),
