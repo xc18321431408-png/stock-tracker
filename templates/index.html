@@ -2825,23 +2825,38 @@ function renderStatusDetail(d) {
   for (const [key, c] of Object.entries(checks)) {
     const borderColor = c.ok ? 'var(--green)' : 'var(--red)';
     let detail = '';
-    if (c.latest_date) detail += '<div>📅 最新数据：<b>' + c.latest_date + '</b>（' + c.sectors + '个板块）</div>';
-    if (c.fetched_at) detail += '<div>⏱️ 上次抓取：' + c.fetched_at + '</div>';
-    if (c.next_update) detail += '<div>⏰ 下次定时更新：' + c.next_update + '</div>';
+    if (c.latest_date) {
+      if (c.sectors !== null && c.sectors !== undefined) {
+        detail += '<div>📅 最新数据：<b>' + c.latest_date + '</b>（' + c.sectors + '个板块）</div>';
+      } else {
+        detail += '<div>📅 最新基准日：<b>' + c.latest_date + '</b></div>';
+      }
+    }
+    if (c.fetched_at) detail += '<div>⏱️ 上次计算：' + c.fetched_at + '</div>';
+    if (c.next_update) detail += '<div>⏰ ' + c.next_update + '</div>';
     if (c.last_refresh) detail += '<div>🕐 上次刷新：' + c.last_refresh + '</div>';
     if (c.interval) detail += '<div>🔁 频率：每' + c.interval + '</div>';
     if (c.cached_reports !== undefined) detail += '<div>📊 已缓存：' + c.cached_reports + '份</div>';
 
-    const btnLabel = (key === 'us' || key === 'cn') ? '🔄 立即抓取' : (key === 'kol' ? '🔄 刷新推文' : '🔄 清缓存');
-    const refreshBtn = '<button id="btn-refresh-' + key + '" onclick="event.stopPropagation();refreshItem(\'' + key + '\')" style="margin-top:4px;padding:4px 12px;background:var(--accent);border:none;color:#fff;border-radius:5px;cursor:pointer;font-size:11px">' + btnLabel + '</button>';
+    let refreshBtn = '';
+    if (key === 'us' || key === 'cn') {
+      refreshBtn = '<button id="btn-refresh-' + key + '" onclick="event.stopPropagation();refreshItem(\'' + key + '\')" style="margin-top:4px;padding:4px 12px;background:var(--accent);border:none;color:#fff;border-radius:5px;cursor:pointer;font-size:11px">🔄 立即抓取</button>';
+    } else if (key === 'rotation_us' || key === 'rotation_cn') {
+      const rotTab = key === 'rotation_us' ? 'rotation' : 'rotation';
+      refreshBtn = '<button onclick="event.stopPropagation();switchTab(\'rotation\');document.getElementById(\'statusDetail\').style.display=\'none\';_statusExpanded=false;document.getElementById(\'statusExpandHint\').textContent=\'▼ 展开\'" style="margin-top:4px;padding:4px 12px;background:var(--accent);border:none;color:#fff;border-radius:5px;cursor:pointer;font-size:11px">📊 查看轮动</button>';
+    } else if (key === 'kol') {
+      refreshBtn = '<button id="btn-refresh-' + key + '" onclick="event.stopPropagation();refreshItem(\'' + key + '\')" style="margin-top:4px;padding:4px 12px;background:var(--accent);border:none;color:#fff;border-radius:5px;cursor:pointer;font-size:11px">🔄 刷新推文</button>';
+    } else {
+      refreshBtn = '<button id="btn-refresh-' + key + '" onclick="event.stopPropagation();refreshItem(\'' + key + '\')" style="margin-top:4px;padding:4px 12px;background:var(--accent);border:none;color:#fff;border-radius:5px;cursor:pointer;font-size:11px">🔄 清缓存</button>';
+    }
 
     html += '<div style="background:var(--bg);border-radius:8px;padding:10px 14px;margin-bottom:6px;border-left:3px solid ' + borderColor + '">' +
       '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
       '<div><b>' + (c.ok?'🟢':'🔴') + ' ' + c.name + '</b>' + detail + '</div>' +
-      '<div style="text-align:right">' + (c.ok ? '' : refreshBtn) + '</div>' +
+      '<div style="text-align:right">' + refreshBtn + '</div>' +
       '</div></div>';
   }
-  html += '<div style="font-size:10px;color:var(--muted);text-align:center;margin-top:6px">检测时间：' + (d.time||'') + ' | 每5分钟自动检测 | 异常项可点击按钮手动更新</div>';
+  html += '<div style="font-size:10px;color:var(--muted);text-align:center;margin-top:6px">检测时间：' + (d.time||'') + ' | 每5分钟自动检测 | 点击"查看轮动"打开板块轮动页面</div>';
   document.getElementById('statusDetail').innerHTML = html;
 }
 

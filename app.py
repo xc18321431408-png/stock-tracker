@@ -39,6 +39,7 @@ YF_HEADERS = {
 _news_cache = {}  # {market: (timestamp, articles)}
 _kol_cache = {}   # {market: (timestamp, articles)}
 _technicals_cache = {}  # {symbol: (timestamp, data)} — 30 day TTL
+_rotation_cache = {}  # {market: (timestamp, dates)} track rotation data freshness
 _news_cache_lock = threading.Lock()
 
 # ── KOL Twitter Accounts ──────────────────────────────────
@@ -3346,6 +3347,44 @@ def api_health():
         "ok": True
     }
 
+    # US Rotation data freshness (derived from sector data, tracks last compute time)
+    us_rot = _rotation_cache.get('us')
+    if us_rot:
+        us_rot_ts, us_rot_dates = us_rot
+        us_rot_age = (time.time() - us_rot_ts) / 60
+        us_rot_ok = us_rot_age < 1440  # 24h
+    else:
+        us_rot_dates = None
+        us_rot_age = None
+        us_rot_ok = False
+    status["checks"]["rotation_us"] = {
+        "name": "美股板块轮动",
+        "latest_date": us_rot_dates.get('d1') if us_rot_dates else None,
+        "sectors": None,
+        "fetched_at": f"{us_rot_age:.0f}分钟前" if us_rot_age is not None else "尚未计算",
+        "next_update": "访问轮动页面时实时计算",
+        "ok": us_rot_ok
+    }
+
+    # CN Rotation data freshness
+    cn_rot = _rotation_cache.get('cn')
+    if cn_rot:
+        cn_rot_ts, cn_rot_dates = cn_rot
+        cn_rot_age = (time.time() - cn_rot_ts) / 60
+        cn_rot_ok = cn_rot_age < 1440
+    else:
+        cn_rot_dates = None
+        cn_rot_age = None
+        cn_rot_ok = False
+    status["checks"]["rotation_cn"] = {
+        "name": "A股板块轮动",
+        "latest_date": cn_rot_dates.get('d1') if cn_rot_dates else None,
+        "sectors": None,
+        "fetched_at": f"{cn_rot_age:.0f}分钟前" if cn_rot_age is not None else "尚未计算",
+        "next_update": "访问轮动页面时实时计算",
+        "ok": cn_rot_ok
+    }
+
     # Overall
     all_ok = all(c["ok"] for c in status["checks"].values())
     status["status"] = "healthy" if all_ok else "stale"
@@ -3472,7 +3511,9 @@ def api_rotation():
                         c1 = conn.execute("SELECT close FROM sector_data WHERE name=? AND date=?", (key, d1)).fetchone()
                         if c1 and r[0] and r[0] > 0:
                             sectors[key][label] = round(((c1[0] - r[0]) / r[0]) * 100, 2)
-    return jsonify({"dates": {"d1": d1, "d5": d5, "d20": d20, "d60": d60}, "sectors": list(sectors.values())})
+    dates_info = {"d1": d1, "d5": d5, "d20": d20, "d60": d60}
+    _rotation_cache['us'] = (time.time(), dates_info)
+    return jsonify({"dates": dates_info, "sectors": list(sectors.values())})
 
 @app.route('/api/macro')
 def api_macro():
@@ -3723,7 +3764,9 @@ def api_cn_rotation():
                         c1 = conn.execute("SELECT close FROM sector_data WHERE name=? AND date=?", (key, d1)).fetchone()
                         if c1 and r[0] and r[0] > 0:
                             sectors[key][label] = round(((c1[0] - r[0]) / r[0]) * 100, 2)
-    return jsonify({"dates": {"d1": d1, "d5": d5, "d20": d20, "d60": d60}, "sectors": list(sectors.values())})
+    dates_info = {"d1": d1, "d5": d5, "d20": d20, "d60": d60}
+    _rotation_cache['cn'] = (time.time(), dates_info)
+    return jsonify({"dates": dates_info, "sectors": list(sectors.values())})
 
 @app.route('/api/cn/correlation')
 def api_cn_correlation():
