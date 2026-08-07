@@ -262,6 +262,19 @@ canvas{max-height:380px}
     <div class="meta">1日 / 5日 / 20日 / 60日 涨跌幅矩阵 | 红色=强 绿色=弱</div>
   </div>
 </div>
+
+<!-- Oversold Bounce Signal Panel -->
+<div id="oversoldPanel" class="chart-box" style="padding:16px 20px;margin-bottom:16px;border:1px solid var(--gold);background:linear-gradient(135deg, rgba(251,191,36,0.08) 0%, rgba(251,191,36,0.02) 100%)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <h3 style="margin:0;color:var(--gold)">🎯 昨日60日超跌反弹信号</h3>
+    <span style="font-size:11px;color:var(--muted)" id="oversoldDate"></span>
+  </div>
+  <div style="font-size:12px;color:var(--muted);margin-bottom:12px">基于 <b>昨天收盘</b> 的60日跌幅排名 — 今天开盘即可盯住这些板块捕捉反弹</div>
+  <div id="oversoldContent" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:8px">
+    <div class="loading-spinner"><div class="spinner"></div></div>
+  </div>
+</div>
+
 <div class="chart-box" style="min-height:650px">
   <div id="rotationChart" style="width:100%;height:100%"></div>
 </div>
@@ -2255,11 +2268,74 @@ function toggleWatch(symbol) {
 }
 function isWatched(symbol) { return getWatchlist().includes(symbol); }
 
+// ── Oversold Bounce Signals ──
+async function loadOversoldSignals() {
+  const container = document.getElementById('oversoldContent');
+  if (!container) return;
+  container.innerHTML = '<div class="loading-spinner"><div class="spinner"></div></div>';
+  try {
+    const resp = await fetch(apiBase('/rotation/oversold?limit=10'));
+    const data = await resp.json();
+    if (data.error) { container.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px">暂无足够数据</div>'; return; }
+
+    const items = data.oversold || [];
+    const dates = data.dates || {};
+    document.getElementById('oversoldDate').textContent =
+      '基准日: ' + (dates.yesterday||'?') + ' | 今天: ' + (dates.today||'?');
+
+    let html = '';
+    items.forEach((s, i) => {
+      const d60v = s.d60_yesterday;
+      const todayV = s.d1_today;
+      const bounced = todayV !== null && todayV !== undefined && todayV > 0;
+      const todayClass = bounced ? 'var(--red)' : 'var(--green)';
+      const bounceIcon = todayV !== null ? (bounced ? '🚀 反弹中' : '📉 继续跌') : '⏳ 待开盘';
+      const d60Color = d60v < -15 ? 'var(--red)' : d60v < -8 ? 'var(--gold)' : 'var(--muted)';
+      const severityTag = d60v < -20 ? '💀 极度超跌' : d60v < -12 ? '🔴 深度超跌' : d60v < -7 ? '🟡 中度超跌' : '🟢 轻度超跌';
+
+      html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;transition:all .2s;cursor:pointer"
+          onclick="showTA('${s.name||''}', '')"
+          onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateY(-1px)'"
+          onmouseout="this.style.borderColor='var(--border)';this.style.transform='none'">
+        <span style="font-size:22px;font-weight:800;color:var(--gold);min-width:32px">#${i+1}</span>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+            <span style="font-size:13px;font-weight:700;color:var(--text)">${s.name||''}</span>
+            <span style="font-size:10px;color:var(--muted)">${s.category||''}</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;font-size:12px">
+            <span>📅 昨日60日: <b style="color:${d60Color}">${d60v>0?'+':''}${d60v.toFixed(2)}%</b></span>
+            <span>${severityTag}</span>
+            ${todayV !== null && todayV !== undefined
+              ? `<span>今天: <b style="color:${todayClass}">${todayV>0?'+':''}${todayV.toFixed(2)}%</b> ${bounceIcon}</span>`
+              : `<span style="color:var(--muted)">${bounceIcon}</span>`}
+          </div>
+          <div style="margin-top:4px;height:3px;background:rgba(255,255,255,0.06);border-radius:2px">
+            <div style="height:3px;width:${Math.min(Math.abs(d60v)/25*100,100)}%;background:${d60Color};border-radius:2px;opacity:0.7"></div>
+          </div>
+        </div>
+        <span style="font-size:20px">${bounced ? '🔥' : '👀'}</span>
+      </div>`;
+    });
+
+    if (!items.length) {
+      html = '<div style="color:var(--muted);text-align:center;padding:20px">暂无超跌信号</div>';
+    }
+    container.innerHTML = html;
+  } catch(e) {
+    container.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px">加载失败，请刷新重试</div>';
+  }
+}
+
 // ── Rotation Heatmap ──
 async function renderRotationChart() {
   const el = document.getElementById('rotationChart');
   if (!el) return;
   el.innerHTML = '<div class="loading-spinner"><div class="spinner"></div><div class="text">加载中...</div></div>';
+
+  // Load oversold signals in parallel
+  loadOversoldSignals();
+
   try {
     const resp = await fetch(apiBase('/rotation'));
     const data = await resp.json();

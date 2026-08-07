@@ -3514,6 +3514,75 @@ def api_rotation():
     _rotation_cache['us'] = (time.time(), dates_info)
     return jsonify({"dates": dates_info, "sectors": list(sectors.values())})
 
+@app.route('/api/rotation/oversold')
+def api_rotation_oversold():
+    """Return yesterday's biggest 60d losers — oversold bounce candidates for today."""
+    limit = request.args.get('limit', 10, type=int)
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        dates = [r[0] for r in conn.execute(
+            "SELECT DISTINCT date FROM sector_data ORDER BY date DESC LIMIT 65"
+        ).fetchall()]
+        if len(dates) < 3:
+            return jsonify({"error": "insufficient data"})
+
+        # Use dates[1] = yesterday as the reference "today"
+        # dates[0] = actual today/latest; dates[1] = yesterday
+        today = dates[0]
+        yesterday = dates[1]
+        d60_yesterday = dates[60] if len(dates) > 60 else dates[-1]
+
+        # Get yesterday's data points
+        rows = conn.execute(
+            "SELECT date, name, category, close, change_pct FROM sector_data "
+            "WHERE date IN (?,?,?) AND category != '指数'",
+            (yesterday, d60_yesterday, today)
+        ).fetchall()
+
+    # Compute 60d change as of yesterday
+    sectors = {}
+    for r in rows:
+        key = r['name']
+        if key not in sectors:
+            sectors[key] = {
+                'name': key, 'category': r['category'],
+                'd60_yesterday': None,  # 60d return at yesterday's close
+                'd1_today': None,       # today's daily change
+                'close_yesterday': None,
+                'close_d60': None,
+                'close_today': None,
+            }
+        if r['date'] == yesterday:
+            sectors[key]['d1_today_temp'] = r['change_pct']  # yesterday's daily change (for reference)
+            sectors[key]['close_yesterday'] = r['close']
+        elif r['date'] == d60_yesterday:
+            sectors[key]['close_d60'] = r['close']
+        elif r['date'] == today:
+            sectors[key]['d1_today'] = r['change_pct']
+            sectors[key]['close_today'] = r['close']
+
+    # Compute 60d return as of yesterday
+    for key, s in list(sectors.items()):
+        if s['close_d60'] and s['close_yesterday'] and s['close_d60'] > 0:
+            s['d60_yesterday'] = round(
+                (s['close_yesterday'] - s['close_d60']) / s['close_d60'] * 100, 2
+            )
+        # Clean up temp field
+        s.pop('d1_today_temp', None)
+
+    # Filter sectors with valid 60d data, sort by d60_yesterday (worst first)
+    valid = [s for s in sectors.values() if s['d60_yesterday'] is not None]
+    valid.sort(key=lambda x: x['d60_yesterday'])
+
+    # Top N worst 60d performers as of yesterday
+    oversold = valid[:limit]
+
+    return jsonify({
+        "dates": {"today": today, "yesterday": yesterday, "d60": d60_yesterday},
+        "oversold": oversold,
+        "all_count": len(valid),
+    })
+
 @app.route('/api/macro')
 def api_macro():
     """Fetch key macro indicators."""
