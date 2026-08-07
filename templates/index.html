@@ -119,14 +119,124 @@ canvas{max-height:380px}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--card);border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:8px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:200;opacity:0;transition:all .3s ease}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 
+/* ══════════════════════════════════════════════════════ */
+/*                Mobile Responsive Styles               */
+/* ══════════════════════════════════════════════════════ */
 @media(max-width:768px){
-  .quant-panel{grid-template-columns:1fr}
-  .sector-grid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+  /* Body */
+  body{padding:10px;font-size:14px}
+
+  /* Header */
+  .header{padding:8px 0;margin-bottom:12px;flex-direction:column;align-items:flex-start;gap:6px}
+  .header h1{font-size:20px}
+
+  /* Tabs - compact scrollable */
+  .tabs{margin-bottom:12px;padding:3px;gap:2px;border-radius:8px}
+  .tab{padding:6px 8px;font-size:10px;border-radius:5px}
+
+  /* Date navigator */
+  .date-nav{gap:6px;margin-bottom:10px}
   .date-nav .page-indicator{display:none}
-  .date-nav input[type=range]{order:1;width:100%;margin-top:4px}
-  .date-nav .nav-group{order:0}
-  .date-nav .latest-btn{order:0}
+  .date-nav input[type=range]{order:1;width:100%;margin-top:4px;min-width:auto}
+  .date-nav .nav-group{order:0;padding:2px}
+  .date-nav .latest-btn{order:0;font-size:10px;padding:5px 10px}
+  .date-nav button.nav-btn{width:28px;height:28px;font-size:14px}
+  .date-nav .date-display{min-width:90px;font-size:12px;padding:4px 10px}
+
+  /* Cards */
+  .cards{grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+  .card{padding:14px 10px;border-radius:10px}
+  .card .val{font-size:22px}
+  .card .lbl{font-size:10px}
+
+  /* Sector grid */
+  .sector-grid{grid-template-columns:1fr;gap:8px}
+  .sector-item{padding:12px;border-radius:10px}
+
+  /* Chart boxes */
+  .chart-box{padding:12px;margin-bottom:12px;border-radius:10px}
+  .chart-box h3{font-size:13px}
+  canvas{max-height:280px}
+
+  /* Modal */
+  .modal{padding:16px;max-width:100%;width:100%;border-radius:12px;max-height:85vh}
+  .modal h3{font-size:16px}
+  .modal th{font-size:10px;padding:6px 8px}
+  .modal td{font-size:12px;padding:6px 8px}
+  .modal .close{top:8px;right:12px;font-size:20px}
+
+  /* Modal table - horizontal scroll */
+  .modal table{display:block;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch}
+  .modal table thead,.modal table tbody{display:table;width:100%;min-width:600px}
+
+  /* Quant panel */
+  .quant-panel{grid-template-columns:1fr;gap:12px}
+  .quant-form{padding:16px}
+  .quant-result{padding:16px}
+  .quant-result .metric-grid{grid-template-columns:1fr 1fr;gap:8px}
+  .quant-result .metric{padding:10px}
+  .quant-result .metric .mv{font-size:20px}
+
+  /* Footer */
+  .footer{padding:16px;font-size:10px;margin-top:16px}
+
+  /* Status bar */
+  #statusBar{font-size:10px !important;gap:6px !important;padding:8px !important}
+
+  /* Macros */
+  #macroCards .cards{grid-template-columns:repeat(auto-fit,minmax(130px,1fr))}
+
+  /* Category sections */
+  .cat-title{font-size:13px;padding:8px 12px}
+  .cat-section{margin-bottom:18px}
+
+  /* Toast */
+  .toast{font-size:11px;padding:8px 14px;bottom:12px;max-width:90vw}
+
+  /* Oversold panel */
+  #oversoldPanel{padding:10px 14px !important}
+  #oversoldContent{grid-template-columns:1fr !important;gap:6px}
+
+  /* Rotation ranking - stack top/bottom */
+  .rot-period-panel > div[style*="grid-template-columns"]{grid-template-columns:1fr !important;gap:10px}
+
+  /* T0 layout - stack vertically */
+  #t0Content > div[style*="grid-template-columns"]{grid-template-columns:1fr !important}
+  #t0Content > div > div:first-child{order:-1}
+
+  /* Screener */
+  #screenerContent > div > div[style*="grid-template-columns"]{grid-template-columns:1fr !important}
+
+  /* Quant backtest */
+  #tab-quant > div[style*="grid-template-columns"]{grid-template-columns:1fr !important}
+
+  /* Watchlist detail */
+  .wl-detail-grid{grid-template-columns:1fr !important;grid-template-rows:auto !important}
+  .wl-detail-grid canvas{max-height:200px !important}
+
+  /* Intel / news */
+  #tab-intel > div[style*="grid-template-columns"]{grid-template-columns:1fr !important}
+  .news-item{font-size:11px;gap:6px;padding:8px}
+  .news-item .news-source{min-width:44px;font-size:9px}
+
+  /* Trends page */
+  #trendsContent{flex-direction:column;gap:12px}
+  #tab-trends > div[style*="grid-template-columns"]{grid-template-columns:1fr !important}
+
+  /* Correlation */
+  #tab-correlation .header{flex-direction:column}
+
+  /* Bubble chart */
+  #tab-bubble canvas{max-height:350px}
+
+  /* Buttons - compact */
+  button{padding:6px 10px !important;font-size:11px !important}
+  .tab{padding:6px 8px !important;font-size:10px !important}
+
+  /* Fix table overflow anywhere */
+  table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
 }
+
 
 /* News panel */
 .news-item{display:flex;align-items:flex-start;gap:12px;padding:10px 12px;border-radius:8px;margin-bottom:4px;transition:background .15s;font-size:13px;line-height:1.5}
@@ -499,6 +609,8 @@ function apiBase(path) {
   return market === 'cn' ? '/api/cn' + path : '/api' + path;
 }
 
+function isMobile() { return window.innerWidth <= 768; }
+
 const WEEKDAYS = ['周日','周一','周二','周三','周四','周五','周六'];
 
 function getWeekday(dateStr) {
@@ -836,7 +948,7 @@ async function loadT0() {
 
     const scoreColor = d.long_score > d.short_score ? 'var(--red)' : d.short_score > d.long_score ? 'var(--green)' : 'var(--muted)';
 
-    let html = '<div style="display:grid;grid-template-columns:280px 1fr;gap:16px">';
+    let html = '<div style="display:grid;grid-template-columns:' + (isMobile()?'1fr':'280px 1fr') + ';gap:16px">';
 
     // Left: Signal Summary
     html += '<div style="background:var(--bg);border-radius:12px;padding:16px;border:3px solid ' + d.action_color + ';text-align:center">';
@@ -850,7 +962,7 @@ async function loadT0() {
     html += '<div style="font-size:11px;color:var(--muted);margin-top:4px">≥40强烈 | ≥20偏 | <20观望</div></div>';
 
     // Right: Details
-    html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
+    html += '<div style="display:grid;grid-template-columns:' + (isMobile()?'1fr':'1fr 1fr') + ';gap:10px">';
     // RSI + BB (Intraday + Daily)
     html += '<div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">';
     html += '<h4 style="font-size:12px;color:var(--accent);margin:0 0 8px 0">📊 RSI · 布林带 (日内+日线)</h4>';
@@ -968,7 +1080,7 @@ async function loadIntel() {
     const data = await resp.json();
     const events = data.events || [], ipos = data.ipos || [];
 
-    let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">';
+    let html = '<div style="display:grid;grid-template-columns:' + (isMobile()?'1fr':'1fr 1fr') + ';gap:20px">';
 
     // ── Market Events ──
     html += '<div>';
@@ -1437,7 +1549,7 @@ async function showTA(symbol) {
     if (d.error) { container.innerHTML = '<p style="color:var(--red);text-align:center;padding:40px">❌ ' + d.error + '</p>'; return; }
 
     const dates = d.dates, closes = d.closes;
-    let html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px">';
+    let html = '<div style="display:grid;grid-template-columns:' + (isMobile()?'1fr':'1fr 1fr') + ';gap:12px;margin-top:12px">';
 
     // ── Main Chart: Candlestick + BB + MA ──
     html += '<div style="background:var(--bg);border-radius:8px;padding:8px"><h4 style="font-size:12px;color:var(--text);margin:0 0 4px 0">📊 ' + symbol + ' K线 · 布林带 · 均线</h4><div id="ta-main" style="height:360px"></div></div>';
@@ -2422,7 +2534,7 @@ async function renderRotationChart() {
       const display = idx === 3 ? 'block' : 'none';
 
       html += `<div class="rot-period-panel" data-period="${idx}" style="display:${display}">`;
-      html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">';
+      html += '<div style="display:grid;grid-template-columns:' + (isMobile()?'1fr':'1fr 1fr') + ';gap:16px">';
 
       // Top 10 (strongest)
       html += '<div>';
