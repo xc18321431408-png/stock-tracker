@@ -2807,7 +2807,7 @@ def _do_backtest():
 
 @app.route('/api/stock/<symbol>/t0')
 def api_t0_signals(symbol):
-    """Return T+0 intraday signals: RSI(6), MACD 5-min, Bollinger Bands, VWAP."""
+    """Return T+0 intraday signals + daily context: RSI(6), MACD 5-min, Bollinger Bands, VWAP + RSI(14) daily, BB daily."""
     try:
         sym = symbol.upper()
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=5m&range=5d"
@@ -2823,14 +2823,14 @@ def api_t0_signals(symbol):
         n = len(closes)
         if n < 30: return jsonify({"error": f"insufficient bars: {n}"}), 500
 
-        # RSI(6)
+        # ── Intraday: RSI(6) ──
         gains, losses = [], []
         for i in range(1, n): d=closes[i]-closes[i-1]; gains.append(max(d,0)); losses.append(max(-d,0))
         avg_g = sum(gains[-6:])/6; avg_l = sum(losses[-6:])/6
         rs = avg_g/avg_l if avg_l>0 else 100
         rsi6 = round(100-100/(1+rs), 1)
 
-        # MACD(12,26,9) on 5-min bars
+        # ── Intraday: MACD(12,26,9) on 5-min bars ──
         def ema(d,p): k=2/(p+1); r=[d[0]]; [r.append(d[i]*k+r[-1]*(1-k)) for i in range(1,len(d))]; return r
         e12=ema(closes,12); e26=ema(closes,26)
         macd=[e12[i]-e26[i] for i in range(n)]; sig=ema(macd,9)
@@ -2840,7 +2840,7 @@ def api_t0_signals(symbol):
         golden_cross = macd_prev <= sig_prev and macd_now > sig_now
         dead_cross = macd_prev >= sig_prev and macd_now < sig_now
 
-        # Bollinger Bands(20,2)
+        # ── Intraday: Bollinger Bands(20,2) ──
         bb20 = closes[-20:]; ma20 = sum(bb20)/20
         std20 = (sum((x-ma20)**2 for x in bb20)/20)**0.5
         bb_upper = round(ma20+2*std20, 2); bb_lower = round(ma20-2*std20, 2)
@@ -2848,39 +2848,115 @@ def api_t0_signals(symbol):
         touch_lower = closes[-1] <= bb_lower * 1.002
         touch_upper = closes[-1] >= bb_upper * 0.998
 
-        # VWAP (today's volume-weighted avg price)
-        today_cutoff = max(0, n-78)  # ~6.5 hours of 5-min bars
+        # ── Intraday: VWAP ──
+        today_cutoff = max(0, n-78)
         today_closes = closes[today_cutoff:]; today_vols = volumes[today_cutoff:] if len(volumes)>=n else [0]*len(today_closes)
         vwap_num = sum(today_closes[i]*(today_vols[i] or 0) for i in range(len(today_closes)))
         vwap_den = sum(v or 0 for v in today_vols)
         vwap = round(vwap_num/vwap_den, 2) if vwap_den>0 else closes[-1]
 
-        # Volume analysis
+        # ── Intraday: Volume ──
         vol_last = volumes[-1] or 0
         vol_avg_10 = sum(v or 0 for v in volumes[-11:-1])/10 if len(volumes)>=11 else vol_last
         vol_surge = round(vol_last/vol_avg_10, 2) if vol_avg_10>0 else 1.0
 
-        # Price action
+        # ── Intraday: Price action ──
         price_change = round((closes[-1]-closes[-6])/closes[-6]*100, 2) if len(closes)>=6 and closes[-6]>0 else 0
         high_1d = max(closes[-78:]) if len(closes)>=78 else max(closes)
         low_1d = min(closes[-78:]) if len(closes)>=78 else min(closes)
 
-        # ── Signal Strength ──
+        # ═══════════════════════════════════════════
+        # ── Daily Context: RSI(14) + BB(20,2) ──
+        # ═══════════════════════════════════════════
+        d_rsi14 = d_bb_pos = d_bb_lower = d_bb_upper = None
+        d_touch_lower = d_touch_upper = False
+        d_close = d_ma20 = d_prev_close = None
+        d_change_pct = None
+        d_long_signals = []
+        d_short_signals = []
+
+        try:
+            d_url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=1mo"
+            d_resp = requests.get(d_url, headers=YF_HEADERS, timeout=12)
+            if d_resp.status_code == 200:
+                d_data = d_resp.json()
+                d_r = d_data.get('chart',{}).get('result',[None])[0]
+                if d_r:
+                    d_meta = d_r.get('meta',{})
+                    d_quotes = d_r.get('indicators',{}).get('quote',[{}])[0]
+                    d_closes_raw = d_quotes.get('close',[])
+                    d_closes = [c for c in d_closes_raw if c is not None]
+                    d_timestamps = d_r.get('timestamp',[])
+
+                    if len(d_closes) >= 20:
+                        d_close = d_closes[-1]
+                        d_prev_close = d_meta.get('previousClose') or d_meta.get('chartPreviousClose')
+                        if d_prev_close and d_prev_close > 0:
+                            d_change_pct = round((d_close - d_prev_close) / d_prev_close * 100, 2)
+
+                        # Daily RSI(14)
+                        d_gains, d_losses = [], []
+                        for i in range(1, len(d_closes)):
+                            diff = d_closes[i] - d_closes[i-1]
+                            d_gains.append(max(diff, 0))
+                            d_losses.append(max(-diff, 0))
+                        # Wilder's smoothing for RSI(14)
+                        d_avg_g = sum(d_gains[:14]) / 14
+                        d_avg_l = sum(d_losses[:14]) / 14
+                        for i in range(14, len(d_gains)):
+                            d_avg_g = (d_avg_g * 13 + d_gains[i]) / 14
+                            d_avg_l = (d_avg_l * 13 + d_losses[i]) / 14
+                        d_rs = d_avg_g / d_avg_l if d_avg_l > 0 else 100
+                        d_rsi14 = round(100 - 100 / (1 + d_rs), 1)
+
+                        # Daily Bollinger Bands(20,2)
+                        d_bb20 = d_closes[-20:]
+                        d_ma20 = sum(d_bb20) / 20
+                        d_std20 = (sum((x - d_ma20) ** 2 for x in d_bb20) / 20) ** 0.5
+                        d_bb_upper = round(d_ma20 + 2 * d_std20, 2)
+                        d_bb_lower = round(d_ma20 - 2 * d_std20, 2)
+                        d_bb_pos = round((d_close - d_bb_lower) / (d_bb_upper - d_bb_lower) * 100, 1) if (d_bb_upper - d_bb_lower) > 0 else 50
+                        d_touch_lower = d_close <= d_bb_lower * 1.005
+                        d_touch_upper = d_close >= d_bb_upper * 0.995
+
+                        # Daily signals (higher weight — daily trend carries macro significance)
+                        if d_rsi14 < 30:   d_long_signals.append(("日线RSI超卖", 30))
+                        elif d_rsi14 < 40: d_long_signals.append(("日线RSI偏低", 20))
+                        if d_rsi14 > 70:   d_short_signals.append(("日线RSI超买", 30))
+                        elif d_rsi14 > 60: d_short_signals.append(("日线RSI偏高", 20))
+                        if d_touch_lower: d_long_signals.append(("日线布林下轨", 35))
+                        elif d_bb_pos is not None and d_bb_pos < 20: d_long_signals.append(("日线BB低位", 25))
+                        if d_touch_upper: d_short_signals.append(("日线布林上轨", 35))
+                        elif d_bb_pos is not None and d_bb_pos > 80: d_short_signals.append(("日线BB高位", 25))
+                        if d_change_pct is not None and d_change_pct < 0: d_long_signals.append(("日线收跌", 10))
+                        if d_change_pct is not None and d_change_pct > 0: d_short_signals.append(("日线收涨", 5))
+        except Exception as e:
+            pass  # Daily context is optional; proceed with intraday-only if it fails
+
+        # ═══════════════════════════════════════════
+        # ── Combined Signal Strength ──
+        # ═══════════════════════════════════════════
         long_signals = []; short_signals = []
-        if rsi6 < 25: long_signals.append(("RSI超卖", 30))
-        elif rsi6 < 35: long_signals.append(("RSI偏弱", 15))
-        if rsi6 > 75: short_signals.append(("RSI超买", 30))
-        elif rsi6 > 65: short_signals.append(("RSI偏强", 15))
-        if touch_lower: long_signals.append(("布林下轨", 25))
-        if touch_upper: short_signals.append(("布林上轨", 25))
-        if bb_pos < 20: long_signals.append(("BB低位", 15))
-        if bb_pos > 80: short_signals.append(("BB高位", 15))
-        if golden_cross: long_signals.append(("MACD金叉", 20))
-        if dead_cross: short_signals.append(("MACD死叉", 20))
-        if closes[-1] < vwap: long_signals.append(("低于VWAP", 10))
-        if closes[-1] > vwap: short_signals.append(("高于VWAP", 10))
-        if vol_surge > 2 and price_change > 0: long_signals.append(("放量拉升", 15))
-        if vol_surge > 2 and price_change < 0: short_signals.append(("放量杀跌", 15))
+
+        # Intraday signals (shorter timeframe, moderate weight)
+        if rsi6 < 25: long_signals.append(("5m RSI超卖", 25))
+        elif rsi6 < 35: long_signals.append(("5m RSI偏弱", 12))
+        if rsi6 > 75: short_signals.append(("5m RSI超买", 25))
+        elif rsi6 > 65: short_signals.append(("5m RSI偏强", 12))
+        if touch_lower: long_signals.append(("5m 布林下轨", 20))
+        if touch_upper: short_signals.append(("5m 布林上轨", 20))
+        if bb_pos < 20: long_signals.append(("5m BB低位", 12))
+        if bb_pos > 80: short_signals.append(("5m BB高位", 12))
+        if golden_cross: long_signals.append(("5m MACD金叉", 18))
+        if dead_cross: short_signals.append(("5m MACD死叉", 18))
+        if closes[-1] < vwap: long_signals.append(("低于VWAP", 8))
+        if closes[-1] > vwap: short_signals.append(("高于VWAP", 8))
+        if vol_surge > 2 and price_change > 0: long_signals.append(("放量拉升", 12))
+        if vol_surge > 2 and price_change < 0: short_signals.append(("放量杀跌", 12))
+
+        # Add daily signals (longer timeframe, higher weight)
+        long_signals.extend(d_long_signals)
+        short_signals.extend(d_short_signals)
 
         long_score = sum(s[1] for s in long_signals)
         short_score = sum(s[1] for s in short_signals)
@@ -2897,11 +2973,18 @@ def api_t0_signals(symbol):
 
         return jsonify({
             "symbol": sym, "last_price": closes[-1], "last_time": last_ts.isoformat(),
+            # Intraday
             "rsi6": rsi6, "macd_golden_cross": golden_cross, "macd_dead_cross": dead_cross,
             "bb_lower": bb_lower, "bb_upper": bb_upper, "bb_pos": bb_pos,
             "touch_lower": touch_lower, "touch_upper": touch_upper,
             "vwap": vwap, "vol_surge": vol_surge, "price_change_30m": price_change,
             "day_high": high_1d, "day_low": low_1d,
+            # Daily context
+            "d_rsi14": d_rsi14, "d_bb_pos": d_bb_pos,
+            "d_bb_lower": d_bb_lower, "d_bb_upper": d_bb_upper,
+            "d_touch_lower": d_touch_lower, "d_touch_upper": d_touch_upper,
+            "d_close": d_close, "d_ma20": d_ma20, "d_change_pct": d_change_pct,
+            # Signals
             "long_signals": [{"name": s[0], "score": s[1]} for s in long_signals],
             "short_signals": [{"name": s[0], "score": s[1]} for s in short_signals],
             "long_score": long_score, "short_score": short_score,

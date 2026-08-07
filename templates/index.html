@@ -851,13 +851,19 @@ async function loadT0() {
 
     // Right: Details
     html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">';
-    // RSI + BB
+    // RSI + BB (Intraday + Daily)
     html += '<div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">';
-    html += '<h4 style="font-size:12px;color:var(--accent);margin:0 0 8px 0">📊 RSI(6) · 布林带</h4>';
-    html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">RSI(6)</span><span style="font-size:14px;font-weight:800;color:' + (d.rsi6<25?'var(--green)':d.rsi6>75?'var(--red)':'var(--text)') + '">' + d.rsi6 + '</span></div>';
-    html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">BB上轨</span><span style="font-size:14px;font-weight:700">' + d.bb_upper + '</span></div>';
-    html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">BB下轨</span><span style="font-size:14px;font-weight:700">' + d.bb_lower + '</span></div>';
-    html += '<div style="display:flex;justify-content:space-between"><span style="font-size:11px;color:var(--muted)">BB位置</span><span style="font-size:14px;font-weight:800;color:' + (d.bb_pos<20?'var(--green)':d.bb_pos>80?'var(--red)':'var(--accent)') + '">' + d.bb_pos + '%</span></div>';
+    html += '<h4 style="font-size:12px;color:var(--accent);margin:0 0 8px 0">📊 RSI · 布林带 (日内+日线)</h4>';
+    html += '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;color:var(--muted)">RSI(6) 5分钟</span><span style="font-size:14px;font-weight:800;color:' + (d.rsi6<25?'var(--green)':d.rsi6>75?'var(--red)':'var(--text)') + '">' + d.rsi6 + '</span></div>';
+    if (d.d_rsi14 != null) {
+      html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px"><span style="font-size:11px;color:var(--muted)">RSI(14) 日线</span><span style="font-size:14px;font-weight:800;color:' + (d.d_rsi14<30?'var(--green)':d.d_rsi14>70?'var(--red)':'var(--text)') + '">' + d.d_rsi14 + '</span></div>';
+    }
+    html += '<div style="border-top:1px solid var(--border);margin:6px 0"></div>';
+    html += '<div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-size:10px;color:var(--muted)">5m BB上/下</span><span style="font-size:12px;font-weight:700">' + d.bb_upper + ' / ' + d.bb_lower + '</span></div>';
+    if (d.d_bb_upper != null) {
+      html += '<div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-size:10px;color:var(--muted)">日线 BB上/下</span><span style="font-size:12px;font-weight:700">' + d.d_bb_upper + ' / ' + d.d_bb_lower + '</span></div>';
+    }
+    html += '<div style="display:flex;justify-content:space-between"><span style="font-size:11px;color:var(--muted)">BB位置 (5m/日)</span><span style="font-size:13px;font-weight:800;color:' + (d.bb_pos<20?'var(--green)':d.bb_pos>80?'var(--red)':'var(--accent)') + '">' + d.bb_pos + '%' + (d.d_bb_pos!=null?' / <b style="color:'+(d.d_bb_pos<20?'var(--green)':d.d_bb_pos>80?'var(--red)':'var(--accent)')+'">'+d.d_bb_pos+'%</b>':'') + '</span></div>';
     html += '</div>';
     // MACD + VWAP + Volume
     html += '<div style="background:var(--bg);border-radius:10px;padding:12px;border:1px solid var(--border)">';
