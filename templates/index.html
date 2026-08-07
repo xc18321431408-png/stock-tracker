@@ -2307,7 +2307,7 @@ async function loadOversoldSignals() {
         ? `<span>今天: <b style="color:${bounced ? 'var(--gold)' : 'var(--muted)'}">${todayV>0?'+':''}${todayV.toFixed(2)}%</b> ${bounceIcon}</span>`
         : `<span style="color:var(--muted)">⏳ 待开盘</span>`;
 
-      html += `<div class="sector-clickable" data-sector="${s.name||''}" style="background:${cardBg};border:${cardBorder};border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;transition:all .2s;cursor:pointer"
+      html += `<div class="sector-clickable" onclick="openSectorDetail('${s.name}')" style="background:${cardBg};border:${cardBorder};border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;transition:all .2s;cursor:pointer"
           onmouseover="this.style.borderColor='${isGold ? 'var(--gold)' : 'var(--accent)'}';this.style.transform='translateY(-1px)'"
           onmouseout="this.style.borderColor='${isGold ? 'var(--gold)' : 'var(--border)'}';this.style.transform='none'">
         <span style="font-size:22px;font-weight:800;color:${isGold ? 'var(--gold)' : 'var(--muted)'};min-width:32px">#${i+1}</span>
@@ -2423,7 +2423,7 @@ async function renderRotationChart() {
       top10.forEach((s, rank) => {
         const v = s[p.key];
         const barW = Math.min(Math.abs(v) / 15 * 100, 100);
-        html += `<div class="sector-clickable" data-sector="${s.name||''}" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--red);cursor:pointer;transition:all .15s"
+        html += `<div class="sector-clickable" onclick="openSectorDetail('${s.name}')" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--red);cursor:pointer;transition:all .15s"
           onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateX(4px)'"
           onmouseout="this.style.borderColor='var(--red)';this.style.transform='none'">
           <span style="font-size:18px;font-weight:800;color:var(--gold);min-width:28px">#${rank+1}</span>
@@ -2447,7 +2447,7 @@ async function renderRotationChart() {
       bot10.forEach((s, rank) => {
         const v = s[p.key];
         const barW = Math.min(Math.abs(v) / 15 * 100, 100);
-        html += `<div class="sector-clickable" data-sector="${s.name||''}" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--green);cursor:pointer;transition:all .15s"
+        html += `<div class="sector-clickable" onclick="openSectorDetail('${s.name}')" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--green);cursor:pointer;transition:all .15s"
           onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateX(4px)'"
           onmouseout="this.style.borderColor='var(--green)';this.style.transform='none'">
           <span style="font-size:18px;font-weight:800;color:var(--gold);min-width:28px">#${rank+1}</span>
@@ -2990,38 +2990,17 @@ function toggleStatusDetail() {
   if (_statusExpanded && _lastStatus) renderStatusDetail(_lastStatus);
 }
 
-// ── Event Delegation: sector-clickable → openSectorDetail ──
+// ── Event Delegation: sector-clickable → openSectorDetail (fallback) ──
 document.addEventListener('click', function(e) {
   try {
     const card = e.target.closest('.sector-clickable');
     if (!card) return;
+    // Skip if already handled by inline onclick
+    if (e.target.hasAttribute('onclick') && e.target.classList.contains('sector-clickable')) return;
     const sectorName = card.getAttribute('data-sector');
-    console.log('[sector-click] clicked:', sectorName);
-    if (sectorName) {
-      showToast('🔍 打开 ' + sectorName);
-      openSectorDetail(sectorName);
-    } else {
-      console.warn('[sector-click] empty data-sector on card:', card);
-    }
+    if (sectorName) openSectorDetail(sectorName);
   } catch(err) {
     console.error('[sector-click] error:', err);
-  }
-});
-
-// Also handle touch events for mobile
-document.addEventListener('touchend', function(e) {
-  try {
-    const card = e.target.closest('.sector-clickable');
-    if (!card) return;
-    e.preventDefault(); // prevent double-firing with click
-    const sectorName = card.getAttribute('data-sector');
-    console.log('[sector-touch] touched:', sectorName);
-    if (sectorName) {
-      showToast('🔍 打开 ' + sectorName);
-      openSectorDetail(sectorName);
-    }
-  } catch(err) {
-    console.error('[sector-touch] error:', err);
   }
 });
 
