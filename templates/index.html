@@ -2992,10 +2992,37 @@ function toggleStatusDetail() {
 
 // ── Event Delegation: sector-clickable → openSectorDetail ──
 document.addEventListener('click', function(e) {
-  const card = e.target.closest('.sector-clickable');
-  if (!card) return;
-  const sectorName = card.getAttribute('data-sector');
-  if (sectorName) openSectorDetail(sectorName);
+  try {
+    const card = e.target.closest('.sector-clickable');
+    if (!card) return;
+    const sectorName = card.getAttribute('data-sector');
+    console.log('[sector-click] clicked:', sectorName);
+    if (sectorName) {
+      showToast('🔍 打开 ' + sectorName);
+      openSectorDetail(sectorName);
+    } else {
+      console.warn('[sector-click] empty data-sector on card:', card);
+    }
+  } catch(err) {
+    console.error('[sector-click] error:', err);
+  }
+});
+
+// Also handle touch events for mobile
+document.addEventListener('touchend', function(e) {
+  try {
+    const card = e.target.closest('.sector-clickable');
+    if (!card) return;
+    e.preventDefault(); // prevent double-firing with click
+    const sectorName = card.getAttribute('data-sector');
+    console.log('[sector-touch] touched:', sectorName);
+    if (sectorName) {
+      showToast('🔍 打开 ' + sectorName);
+      openSectorDetail(sectorName);
+    }
+  } catch(err) {
+    console.error('[sector-touch] error:', err);
+  }
 });
 
 checkStatus();
