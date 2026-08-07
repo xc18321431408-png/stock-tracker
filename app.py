@@ -1672,28 +1672,43 @@ def fetch_stock_quotes(stock_list):
         sym, name, desc = item[0], item[1] if len(item)>1 else sym, item[2] if len(item)>2 else ""
         try:
             current_price = None; prev_close = None
-            # Always get previous close from daily data (most accurate)
-            url_d = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
-            resp_d = requests.get(url_d, headers=YF_HEADERS, timeout=10)
-            if resp_d.status_code == 200:
-                data_d = resp_d.json()
-                r_d = data_d.get('chart', {}).get('result', [None])[0]
-                if r_d:
-                    cd = r_d.get('indicators', {}).get('quote', [{}])[0].get('close', [])
-                    vd = [c for c in cd if c is not None]
-                    if len(vd) >= 1: prev_close = vd[-1]  # latest daily close as baseline
-            # Get current price from 1-minute data (includes after-hours)
+            # Use 1-minute data (includes after-hours) for current price
             url_1m = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1m&range=1d&includePrePost=true"
             resp = requests.get(url_1m, headers=YF_HEADERS, timeout=10)
             if resp.status_code == 200:
                 data = resp.json()
                 r = data.get('chart', {}).get('result', [None])[0]
                 if r:
+                    meta = r.get('meta', {})
+                    # Use Yahoo's official previousClose (previous trading day's final close)
+                    prev_close = meta.get('previousClose') or meta.get('chartPreviousClose')
                     c1m = r.get('indicators', {}).get('quote', [{}])[0].get('close', [])
                     v1m = [c for c in c1m if c is not None]
-                    if v1m: current_price = v1m[-1]
-            # Fallback: use daily close if no 1m data
-            if not current_price and vd: current_price = vd[-1]
+                    if v1m:
+                        current_price = v1m[-1]
+                    # Fallback: use regularMarketPrice if 1m closes empty
+                    if not current_price:
+                        current_price = meta.get('regularMarketPrice')
+
+            # If 1m failed, fall back to daily data
+            if not current_price or not prev_close:
+                url_d = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=5d"
+                resp_d = requests.get(url_d, headers=YF_HEADERS, timeout=10)
+                if resp_d.status_code == 200:
+                    data_d = resp_d.json()
+                    r_d = data_d.get('chart', {}).get('result', [None])[0]
+                    if r_d:
+                        meta_d = r_d.get('meta', {})
+                        if not prev_close:
+                            prev_close = meta_d.get('previousClose') or meta_d.get('chartPreviousClose')
+                        cd = r_d.get('indicators', {}).get('quote', [{}])[0].get('close', [])
+                        vd = [c for c in cd if c is not None]
+                        if not current_price and vd:
+                            current_price = vd[-1]
+                        # Last resort for prev_close: second-to-last daily close
+                        if not prev_close and len(vd) >= 2:
+                            prev_close = vd[-2]
+
             if current_price and prev_close and prev_close > 0:
                 results.append({
                     'symbol': sym, 'name': name, 'desc': desc,
