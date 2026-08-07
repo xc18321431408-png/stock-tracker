@@ -3493,37 +3493,50 @@ def api_rotation():
         d20 = dates[19+offset]  if len(dates) > 19+offset else dates[-1]
         d60 = dates[59+offset]  if len(dates) > 59+offset else dates[-1]
 
+        # Get d1 data (daily change + close) and close prices at d5/d20/d60
         rows = conn.execute(
-            "SELECT date, name, category, close, change_pct FROM sector_data WHERE date IN (?,?,?,?) AND category != '指数'",
+            "SELECT date, name, category, close, change_pct FROM sector_data "
+            "WHERE date IN (?,?,?,?) AND category != '指数'",
             (d1, d5, d20, d60)
         ).fetchall()
-    # Group by sector name
-    sectors = {}
+    # Gather close prices at each reference date
+    closes = {}  # {name: {d1_close, d5_close, d20_close, d60_close}}
+    d1_changes = {}  # {name: change_pct on d1}
+    categories = {}
     for r in rows:
-        key = r['name']
-        if key not in sectors:
-            sectors[key] = {'name': key, 'category': r['category'], 'd1': None, 'd5': None, 'd20': None, 'd60': None}
-        if r['date'] == d1: sectors[key]['d1'] = r['change_pct']
-        elif r['date'] == d5: sectors[key]['d5'] = r['change_pct']
-        elif r['date'] == d20: sectors[key]['d20'] = r['change_pct']
-        elif r['date'] == d60: sectors[key]['d60'] = r['change_pct']
-    # Compute returns for multi-day windows using close prices
-    with sqlite3.connect(DB_PATH) as conn:
-        for key in sectors:
-            for days, label in [(5, 'd5'), (20, 'd20'), (60, 'd60')]:
-                if sectors[key][label] is None:
-                    prev_date = dates[days-1+offset] if len(dates) > days-1+offset else dates[-1]
-                    r = conn.execute(
-                        "SELECT close FROM sector_data WHERE name=? AND date=?",
-                        (key, prev_date)
-                    ).fetchone()
-                    if r:
-                        c1 = conn.execute("SELECT close FROM sector_data WHERE name=? AND date=?", (key, d1)).fetchone()
-                        if c1 and r[0] and r[0] > 0:
-                            sectors[key][label] = round(((c1[0] - r[0]) / r[0]) * 100, 2)
+        name = r['name']
+        if name not in closes:
+            closes[name] = {}
+            categories[name] = r['category']
+        closes[name][r['date']] = r['close']
+        if r['date'] == d1:
+            d1_changes[name] = r['change_pct']
+
+    # Build sector results with cumulative returns from close prices
+    sectors = []
+    for name, cp in closes.items():
+        d1_close = cp.get(d1)
+        d5_close = cp.get(d5)
+        d20_close = cp.get(d20)
+        d60_close = cp.get(d60)
+
+        def cum_return(prev_close):
+            if d1_close and prev_close and prev_close > 0:
+                return round(((d1_close - prev_close) / prev_close) * 100, 2)
+            return None
+
+        sectors.append({
+            'name': name,
+            'category': categories.get(name, ''),
+            'd1': d1_changes.get(name),  # daily change on reference date
+            'd5': cum_return(d5_close),
+            'd20': cum_return(d20_close),
+            'd60': cum_return(d60_close),
+        })
+
     dates_info = {"d1": d1, "d5": d5, "d20": d20, "d60": d60, "ref": ref}
     _rotation_cache['us'] = (time.time(), dates_info)
-    return jsonify({"dates": dates_info, "sectors": list(sectors.values())})
+    return jsonify({"dates": dates_info, "sectors": sectors})
 
 @app.route('/api/rotation/oversold')
 def api_rotation_oversold():
@@ -3824,28 +3837,39 @@ def api_cn_rotation():
             "SELECT date, name, category, close, change_pct FROM sector_data WHERE date IN (?,?,?,?) AND category != '指数'",
             (d1, d5, d20, d60)
         ).fetchall()
-    sectors = {}
+    # Gather close prices at each reference date
+    closes = {}
+    d1_changes = {}
+    categories = {}
     for r in rows:
-        key = r['name']
-        if key not in sectors:
-            sectors[key] = {'name': key, 'category': r['category'], 'd1': None, 'd5': None, 'd20': None, 'd60': None}
-        if r['date'] == d1: sectors[key]['d1'] = r['change_pct']
-        elif r['date'] == d5: sectors[key]['d5'] = r['change_pct']
-        elif r['date'] == d20: sectors[key]['d20'] = r['change_pct']
-        elif r['date'] == d60: sectors[key]['d60'] = r['change_pct']
-    with sqlite3.connect(CN_DB_PATH) as conn:
-        for key in sectors:
-            for days, label in [(5, 'd5'), (20, 'd20'), (60, 'd60')]:
-                if sectors[key][label] is None:
-                    prev_date = dates[days-1] if len(dates) > days-1 else dates[-1]
-                    r = conn.execute("SELECT close FROM sector_data WHERE name=? AND date=?", (key, prev_date)).fetchone()
-                    if r:
-                        c1 = conn.execute("SELECT close FROM sector_data WHERE name=? AND date=?", (key, d1)).fetchone()
-                        if c1 and r[0] and r[0] > 0:
-                            sectors[key][label] = round(((c1[0] - r[0]) / r[0]) * 100, 2)
+        name = r['name']
+        if name not in closes:
+            closes[name] = {}
+            categories[name] = r['category']
+        closes[name][r['date']] = r['close']
+        if r['date'] == d1:
+            d1_changes[name] = r['change_pct']
+
+    def cum_return(d1_close, prev_close):
+        if d1_close and prev_close and prev_close > 0:
+            return round(((d1_close - prev_close) / prev_close) * 100, 2)
+        return None
+
+    sectors = []
+    for name, cp in closes.items():
+        d1c = cp.get(d1)
+        sectors.append({
+            'name': name,
+            'category': categories.get(name, ''),
+            'd1': d1_changes.get(name),
+            'd5': cum_return(d1c, cp.get(d5)),
+            'd20': cum_return(d1c, cp.get(d20)),
+            'd60': cum_return(d1c, cp.get(d60)),
+        })
+
     dates_info = {"d1": d1, "d5": d5, "d20": d20, "d60": d60}
     _rotation_cache['cn'] = (time.time(), dates_info)
-    return jsonify({"dates": dates_info, "sectors": list(sectors.values())})
+    return jsonify({"dates": dates_info, "sectors": sectors})
 
 @app.route('/api/cn/correlation')
 def api_cn_correlation():
