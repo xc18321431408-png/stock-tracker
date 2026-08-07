@@ -227,18 +227,6 @@ canvas{max-height:380px}
 </div>
 
 <div id="categoriesContainer"></div>
-
-<!-- Modal for sector detail -->
-<div class="modal-overlay" id="modalOverlay">
-  <div class="modal">
-    <button class="close" onclick="closeModal()">&times;</button>
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
-      <h3 id="modalTitle" style="margin:0">🔍 板块详情</h3>
-      <button id="compareBtn" onclick="showCompareChart()" style="background:var(--card);border:1px solid var(--border);color:var(--accent);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">📊 对比 (0)</button>
-    </div>
-    <div id="modalContent" class="loading"><div class="loading-spinner"><div class="spinner"></div><div class="text">加载中...</div></div></div>
-  </div>
-</div>
 </div>
 
 <!-- ==================== BUBBLE CHART TAB ==================== -->
@@ -410,6 +398,18 @@ canvas{max-height:380px}
 
 <!-- Toast -->
 <div class="toast" id="toast"></div>
+
+<!-- Modal for sector detail (outside all tabs so visible everywhere) -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <button class="close" onclick="closeModal()">&times;</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <h3 id="modalTitle" style="margin:0">🔍 板块详情</h3>
+      <button id="compareBtn" onclick="showCompareChart()" style="background:var(--card);border:1px solid var(--border);color:var(--accent);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">📊 对比 (0)</button>
+    </div>
+    <div id="modalContent" class="loading"><div class="loading-spinner"><div class="spinner"></div><div class="text">加载中...</div></div></div>
+  </div>
+</div>
 </div>
 
 <script>
