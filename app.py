@@ -3473,7 +3473,11 @@ def api_cn_news():
 
 @app.route('/api/rotation')
 def api_rotation():
-    """Return sector performance across 1d/5d/20d/60d for heatmap."""
+    """Return sector performance across 1d/5d/20d/60d for heatmap.
+    Query params:
+      ref=prev  — use yesterday as the reference date (pre-bounce view)
+    """
+    ref = request.args.get('ref', 'latest')  # 'latest' or 'prev'
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         dates = [r[0] for r in conn.execute(
@@ -3481,7 +3485,14 @@ def api_rotation():
         ).fetchall()]
         if len(dates) < 5:
             return jsonify({"error": "insufficient data"})
-        d1, d5, d20, d60 = dates[0], dates[4] if len(dates) > 4 else dates[-1], dates[19] if len(dates) > 19 else dates[-1], dates[59] if len(dates) > 59 else dates[-1]
+
+        # Offset by 1 if using yesterday as reference (pre-bounce view)
+        offset = 1 if ref == 'prev' else 0
+        d1  = dates[offset]     if len(dates) > offset   else dates[-1]
+        d5  = dates[4+offset]   if len(dates) > 4+offset  else dates[-1]
+        d20 = dates[19+offset]  if len(dates) > 19+offset else dates[-1]
+        d60 = dates[59+offset]  if len(dates) > 59+offset else dates[-1]
+
         rows = conn.execute(
             "SELECT date, name, category, close, change_pct FROM sector_data WHERE date IN (?,?,?,?) AND category != '指数'",
             (d1, d5, d20, d60)
@@ -3501,7 +3512,7 @@ def api_rotation():
         for key in sectors:
             for days, label in [(5, 'd5'), (20, 'd20'), (60, 'd60')]:
                 if sectors[key][label] is None:
-                    prev_date = dates[days-1] if len(dates) > days-1 else dates[-1]
+                    prev_date = dates[days-1+offset] if len(dates) > days-1+offset else dates[-1]
                     r = conn.execute(
                         "SELECT close FROM sector_data WHERE name=? AND date=?",
                         (key, prev_date)
@@ -3510,7 +3521,7 @@ def api_rotation():
                         c1 = conn.execute("SELECT close FROM sector_data WHERE name=? AND date=?", (key, d1)).fetchone()
                         if c1 and r[0] and r[0] > 0:
                             sectors[key][label] = round(((c1[0] - r[0]) / r[0]) * 100, 2)
-    dates_info = {"d1": d1, "d5": d5, "d20": d20, "d60": d60}
+    dates_info = {"d1": d1, "d5": d5, "d20": d20, "d60": d60, "ref": ref}
     _rotation_cache['us'] = (time.time(), dates_info)
     return jsonify({"dates": dates_info, "sectors": list(sectors.values())})
 
