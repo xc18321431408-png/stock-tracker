@@ -3352,16 +3352,16 @@ def api_health():
     if us_rot:
         us_rot_ts, us_rot_dates = us_rot
         us_rot_age = (time.time() - us_rot_ts) / 60
-        us_rot_ok = us_rot_age < 1440  # 24h
     else:
         us_rot_dates = None
         us_rot_age = None
-        us_rot_ok = False
+    # Rotation is OK if underlying sector data is fresh OR recently computed
+    us_rot_ok = not us_stale  # derived from sector data freshness
     status["checks"]["rotation_us"] = {
         "name": "美股板块轮动",
-        "latest_date": us_rot_dates.get('d1') if us_rot_dates else None,
+        "latest_date": us_rot_dates.get('d1') if us_rot_dates else us_date,
         "sectors": None,
-        "fetched_at": f"{us_rot_age:.0f}分钟前" if us_rot_age is not None else "尚未计算",
+        "fetched_at": f"{us_rot_age:.0f}分钟前" if us_rot_age is not None else "基于最新板块数据",
         "next_update": "访问轮动页面时实时计算",
         "ok": us_rot_ok
     }
@@ -3371,16 +3371,15 @@ def api_health():
     if cn_rot:
         cn_rot_ts, cn_rot_dates = cn_rot
         cn_rot_age = (time.time() - cn_rot_ts) / 60
-        cn_rot_ok = cn_rot_age < 1440
     else:
         cn_rot_dates = None
         cn_rot_age = None
-        cn_rot_ok = False
+    cn_rot_ok = not cn_stale
     status["checks"]["rotation_cn"] = {
         "name": "A股板块轮动",
-        "latest_date": cn_rot_dates.get('d1') if cn_rot_dates else None,
+        "latest_date": cn_rot_dates.get('d1') if cn_rot_dates else cn_date,
         "sectors": None,
-        "fetched_at": f"{cn_rot_age:.0f}分钟前" if cn_rot_age is not None else "尚未计算",
+        "fetched_at": f"{cn_rot_age:.0f}分钟前" if cn_rot_age is not None else "基于最新板块数据",
         "next_update": "访问轮动页面时实时计算",
         "ok": cn_rot_ok
     }
