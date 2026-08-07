@@ -2297,33 +2297,35 @@ async function loadOversoldSignals() {
       const d60v = s.d60_yesterday;
       const todayV = s.d1_today;
       const bounced = todayV !== null && todayV !== undefined && todayV > 0;
-      const todayClass = bounced ? 'var(--red)' : 'var(--green)';
-      const bounceIcon = todayV !== null ? (bounced ? '🚀 反弹中' : '📉 继续跌') : '⏳ 待开盘';
-      const d60Color = d60v < -15 ? 'var(--red)' : d60v < -8 ? 'var(--gold)' : 'var(--muted)';
-      const severityTag = d60v < -20 ? '💀 极度超跌' : d60v < -12 ? '🔴 深度超跌' : d60v < -7 ? '🟡 中度超跌' : '🟢 轻度超跌';
+      // Gold = hit! (oversold yesterday + bounced today)
+      const isGold = bounced;
+      const cardBorder = isGold ? '2px solid var(--gold)' : '1px solid var(--border)';
+      const cardBg = isGold ? 'linear-gradient(135deg, rgba(251,191,36,0.12) 0%, rgba(251,191,36,0.03) 100%)' : 'var(--card)';
+      const hitBadge = isGold ? '<span style="background:var(--gold);color:#000;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:800;margin-left:6px">🎯 命中</span>' : '';
+      const bounceIcon = todayV !== null ? (bounced ? '🚀' : '📉') : '⏳';
+      const todayDisplay = todayV !== null && todayV !== undefined
+        ? `<span>今天: <b style="color:${bounced ? 'var(--gold)' : 'var(--muted)'}">${todayV>0?'+':''}${todayV.toFixed(2)}%</b> ${bounceIcon}</span>`
+        : `<span style="color:var(--muted)">⏳ 待开盘</span>`;
 
-      html += `<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;transition:all .2s;cursor:pointer"
+      html += `<div style="background:${cardBg};border:${cardBorder};border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;transition:all .2s;cursor:pointer"
           onclick="showTA('${s.name||''}', '')"
-          onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateY(-1px)'"
-          onmouseout="this.style.borderColor='var(--border)';this.style.transform='none'">
-        <span style="font-size:22px;font-weight:800;color:var(--gold);min-width:32px">#${i+1}</span>
+          onmouseover="this.style.borderColor='${isGold ? 'var(--gold)' : 'var(--accent)'}';this.style.transform='translateY(-1px)'"
+          onmouseout="this.style.borderColor='${isGold ? 'var(--gold)' : 'var(--border)'}';this.style.transform='none'">
+        <span style="font-size:22px;font-weight:800;color:${isGold ? 'var(--gold)' : 'var(--muted)'};min-width:32px">#${i+1}</span>
         <div style="flex:1;min-width:0">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-            <span style="font-size:13px;font-weight:700;color:var(--text)">${s.name||''}</span>
+            <span style="font-size:13px;font-weight:700;color:var(--text)">${s.name||''}${hitBadge}</span>
             <span style="font-size:10px;color:var(--muted)">${s.category||''}</span>
           </div>
           <div style="display:flex;align-items:center;gap:12px;font-size:12px">
-            <span>📅 昨日60日: <b style="color:${d60Color}">${d60v>0?'+':''}${d60v.toFixed(2)}%</b></span>
-            <span>${severityTag}</span>
-            ${todayV !== null && todayV !== undefined
-              ? `<span>今天: <b style="color:${todayClass}">${todayV>0?'+':''}${todayV.toFixed(2)}%</b> ${bounceIcon}</span>`
-              : `<span style="color:var(--muted)">${bounceIcon}</span>`}
+            <span>📅 昨日60日跌幅: <b>${d60v>0?'+':''}${d60v.toFixed(2)}%</b></span>
+            ${todayDisplay}
           </div>
           <div style="margin-top:4px;height:3px;background:rgba(255,255,255,0.06);border-radius:2px">
-            <div style="height:3px;width:${Math.min(Math.abs(d60v)/25*100,100)}%;background:${d60Color};border-radius:2px;opacity:0.7"></div>
+            <div style="height:3px;width:${Math.min(Math.abs(d60v)/25*100,100)}%;background:${isGold ? 'var(--gold)' : 'var(--muted)'};border-radius:2px;opacity:${isGold ? '1' : '0.4'}"></div>
           </div>
         </div>
-        <span style="font-size:20px">${bounced ? '🔥' : '👀'}</span>
+        <span style="font-size:20px">${isGold ? '🎯' : ''}</span>
       </div>`;
     });
 
