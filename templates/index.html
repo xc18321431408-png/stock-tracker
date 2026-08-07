@@ -2308,7 +2308,7 @@ async function loadOversoldSignals() {
         : `<span style="color:var(--muted)">⏳ 待开盘</span>`;
 
       html += `<div style="background:${cardBg};border:${cardBorder};border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;transition:all .2s;cursor:pointer"
-          onclick="showTA('${s.name||''}', '')"
+          onclick="openSectorDetail('${s.name||''}')"
           onmouseover="this.style.borderColor='${isGold ? 'var(--gold)' : 'var(--accent)'}';this.style.transform='translateY(-1px)'"
           onmouseout="this.style.borderColor='${isGold ? 'var(--gold)' : 'var(--border)'}';this.style.transform='none'">
         <span style="font-size:22px;font-weight:800;color:${isGold ? 'var(--gold)' : 'var(--muted)'};min-width:32px">#${i+1}</span>
@@ -2424,7 +2424,10 @@ async function renderRotationChart() {
       top10.forEach((s, rank) => {
         const v = s[p.key];
         const barW = Math.min(Math.abs(v) / 15 * 100, 100);
-        html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--red)">
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--red);cursor:pointer;transition:all .15s"
+          onclick="openSectorDetail('${s.name||''}')"
+          onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateX(4px)'"
+          onmouseout="this.style.borderColor='var(--red)';this.style.transform='none'">
           <span style="font-size:18px;font-weight:800;color:var(--gold);min-width:28px">#${rank+1}</span>
           <div style="flex:1;min-width:0">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
@@ -2446,7 +2449,10 @@ async function renderRotationChart() {
       bot10.forEach((s, rank) => {
         const v = s[p.key];
         const barW = Math.min(Math.abs(v) / 15 * 100, 100);
-        html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--green)">
+        html += `<div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--green);cursor:pointer;transition:all .15s"
+          onclick="openSectorDetail('${s.name||''}')"
+          onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateX(4px)'"
+          onmouseout="this.style.borderColor='var(--green)';this.style.transform='none'">
           <span style="font-size:18px;font-weight:800;color:var(--gold);min-width:28px">#${rank+1}</span>
           <div style="flex:1;min-width:0">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
