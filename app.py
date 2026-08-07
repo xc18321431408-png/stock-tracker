@@ -2493,19 +2493,15 @@ def api_watchlist_quotes():
             chart_data = resp.json().get('chart',{}).get('result',[None])[0]
             if not chart_data: continue
             meta = chart_data.get('meta',{})
-            # Use Yahoo's official previousClose for accurate baseline
-            prev_close = meta.get('previousClose') or meta.get('chartPreviousClose')
             price = meta.get('regularMarketPrice')
             quotes_raw = chart_data.get('indicators',{}).get('quote',[{}])[0]
             closes_raw = [c for c in quotes_raw.get('close',[]) if c is not None]
             if not price: price = closes_raw[-1] if closes_raw else 0
-            # Fallback: use second-to-last close if meta doesn't provide previousClose
-            if not prev_close and len(closes_raw) >= 2:
-                prev_close = closes_raw[-2]
-                for i in range(len(closes_raw)-2, 0, -1):
-                    if closes_raw[i] != closes_raw[-1]:
-                        prev_close = closes_raw[i]; break
-            if not prev_close or prev_close <= 0 or not price: continue
+            if len(closes_raw) < 2 or not price: continue
+            # Use second-to-last daily close as previous close baseline
+            # (meta.previousClose is unreliable for 1mo range - gives start-of-range price)
+            prev_close = closes_raw[-2]
+            if prev_close <= 0: continue
             chg_pct = round((price-prev_close)/prev_close*100, 2)
             # Chart data for sparkline and RSI
             quotes_raw = chart_data.get('indicators',{}).get('quote',[{}])[0]
