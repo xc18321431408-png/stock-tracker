@@ -2032,7 +2032,22 @@ def _run_screener(market='us'):
 
     filtered = [r for r in results if r['rsi'] < 55 and r['sharpe'] > 0 and r['macd_uptrend']]
     filtered.sort(key=lambda x: x['score'], reverse=True)
-    return filtered[:25]
+    top = filtered[:25]
+
+    # Update close with after-hours price for top results
+    for r in top:
+        try:
+            url_1m = f"https://query1.finance.yahoo.com/v8/finance/chart/{r['symbol']}?interval=1m&range=1d&includePrePost=true"
+            resp_1m = requests.get(url_1m, headers=YF_HEADERS, timeout=6)
+            if resp_1m.status_code == 200:
+                rr = resp_1m.json().get('chart',{}).get('result',[None])[0]
+                if rr:
+                    c1m = rr.get('indicators',{}).get('quote',[{}])[0].get('close',[])
+                    v1m = [c for c in c1m if c is not None]
+                    if v1m: r['close'] = round(v1m[-1], 2)
+            time.sleep(0.05)
+        except: pass
+    return top
 
 def _run_backtest_screener(market='us'):
     """Run backtest strategies on top stocks, return those with buy signals."""
@@ -2078,7 +2093,22 @@ def _run_backtest_screener(market='us'):
             except: continue
 
     picks.sort(key=lambda x: x.get('sharpe', 0), reverse=True)
-    return picks[:15]
+    top = picks[:15]
+
+    # Update price with after-hours price for top results
+    for r in top:
+        try:
+            url_1m = f"https://query1.finance.yahoo.com/v8/finance/chart/{r['symbol']}?interval=1m&range=1d&includePrePost=true"
+            resp_1m = requests.get(url_1m, headers=YF_HEADERS, timeout=6)
+            if resp_1m.status_code == 200:
+                rr = resp_1m.json().get('chart',{}).get('result',[None])[0]
+                if rr:
+                    c1m = rr.get('indicators',{}).get('quote',[{}])[0].get('close',[])
+                    v1m = [c for c in c1m if c is not None]
+                    if v1m: r['price'] = round(v1m[-1], 2)
+            time.sleep(0.05)
+        except: pass
+    return top
 
 _screener_cache_cn = {'ts': 0, 'results': []}
 _bt_screener_cache = {'ts': 0, 'results': []}
@@ -2487,13 +2517,25 @@ def api_watchlist_quotes():
     results = []
     for sym in symbols[:50]:
         try:
+            # Fetch current price via 1m data (includes after-hours)
+            price = None
+            url_1m = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1m&range=1d&includePrePost=true"
+            resp_1m = requests.get(url_1m, headers=YF_HEADERS, timeout=8)
+            if resp_1m.status_code == 200:
+                r_1m = resp_1m.json().get('chart',{}).get('result',[None])[0]
+                if r_1m:
+                    c1m = r_1m.get('indicators',{}).get('quote',[{}])[0].get('close',[])
+                    v1m = [c for c in c1m if c is not None]
+                    if v1m: price = v1m[-1]
+
+            # Fetch daily data for prev_close, sparkline, RSI, etc.
             url = f"https://query1.finance.yahoo.com/v8/finance/chart/{sym}?interval=1d&range=1mo&includePrePost=true"
             resp = requests.get(url, headers=YF_HEADERS, timeout=8)
             if resp.status_code != 200: continue
             chart_data = resp.json().get('chart',{}).get('result',[None])[0]
             if not chart_data: continue
             meta = chart_data.get('meta',{})
-            price = meta.get('regularMarketPrice')
+            if not price: price = meta.get('regularMarketPrice')
             quotes_raw = chart_data.get('indicators',{}).get('quote',[{}])[0]
             closes_raw = [c for c in quotes_raw.get('close',[]) if c is not None]
             if not price: price = closes_raw[-1] if closes_raw else 0
