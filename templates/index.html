@@ -2542,6 +2542,15 @@ async function renderRotationChart() {
       top10.forEach((s, rank) => {
         const v = s[p.key];
         const barW = Math.min(Math.abs(v) / 15 * 100, 100);
+        // d1/d60 ratio indicator for 60d view
+        let ratioHtml = '';
+        if (p.key === 'd60' && s.d1_d60_ratio != null && s.d1 != null) {
+          const d1sign = s.d1 > 0 ? '+' : '';
+          const sameDir = (s.d60 > 0 && s.d1 > 0) || (s.d60 < 0 && s.d1 < 0);
+          const ratioColor = sameDir ? 'var(--red)' : 'var(--green)';
+          const arrow = sameDir ? '🔥' : '🔄';
+          ratioHtml = `<div style="font-size:10px;margin-top:1px;color:${ratioColor}">${arrow} 今日${d1sign}${s.d1.toFixed(2)}%，占60日${s.d1_d60_ratio}%</div>`;
+        }
         html += `<div class="sector-clickable" onclick="openSectorDetail('${s.name}')" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--red);cursor:pointer;transition:all .15s"
           onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateX(4px)'"
           onmouseout="this.style.borderColor='var(--red)';this.style.transform='none'">
@@ -2555,17 +2564,27 @@ async function renderRotationChart() {
               <div style="height:4px;width:${barW}%;background:var(--red);border-radius:2px"></div>
             </div>
             <div style="font-size:10px;color:var(--muted);margin-top:2px">${s.category||''}</div>
+            ${ratioHtml}
           </div>
         </div>`;
       });
       html += '</div>';
 
-      // Bottom 5 (weakest)
+      // Bottom 10 (weakest)
       html += '<div>';
       html += '<div style="font-size:14px;font-weight:700;color:var(--green);margin-bottom:10px;display:flex;align-items:center;gap:6px">🟢 最弱 Top 10</div>';
       bot10.forEach((s, rank) => {
         const v = s[p.key];
         const barW = Math.min(Math.abs(v) / 15 * 100, 100);
+        // d1/d60 ratio indicator for 60d view
+        let ratioHtml = '';
+        if (p.key === 'd60' && s.d1_d60_ratio != null && s.d1 != null) {
+          const d1sign = s.d1 > 0 ? '+' : '';
+          const sameDir = (s.d60 > 0 && s.d1 > 0) || (s.d60 < 0 && s.d1 < 0);
+          const ratioColor = sameDir ? 'var(--green)' : 'var(--red)';
+          const arrow = sameDir ? '📉' : '🔄';
+          ratioHtml = `<div style="font-size:10px;margin-top:1px;color:${ratioColor}">${arrow} 今日${d1sign}${s.d1.toFixed(2)}%，占60日${s.d1_d60_ratio}%</div>`;
+        }
         html += `<div class="sector-clickable" onclick="openSectorDetail('${s.name}')" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--card);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--green);cursor:pointer;transition:all .15s"
           onmouseover="this.style.borderColor='var(--accent)';this.style.transform='translateX(4px)'"
           onmouseout="this.style.borderColor='var(--green)';this.style.transform='none'">
@@ -2579,6 +2598,7 @@ async function renderRotationChart() {
               <div style="height:4px;width:${barW}%;background:var(--green);border-radius:2px"></div>
             </div>
             <div style="font-size:10px;color:var(--muted);margin-top:2px">${s.category||''}</div>
+            ${ratioHtml}
           </div>
         </div>`;
       });

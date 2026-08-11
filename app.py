@@ -3698,13 +3698,20 @@ def api_rotation():
                 return round(((d1_close - prev_close) / prev_close) * 100, 2)
             return None
 
+        d1_val = d1_changes.get(name)
+        d60_val = cum_return(d60_close)
+        d1_d60_ratio = None
+        if d1_val is not None and d60_val is not None and d60_val != 0:
+            d1_d60_ratio = round(abs(d1_val / d60_val) * 100, 1)
+
         sectors.append({
             'name': name,
             'category': categories.get(name, ''),
-            'd1': d1_changes.get(name),  # daily change on reference date
+            'd1': d1_val,  # daily change on reference date
             'd5': cum_return(d5_close),
             'd20': cum_return(d20_close),
-            'd60': cum_return(d60_close),
+            'd60': d60_val,
+            'd1_d60_ratio': d1_d60_ratio,  # d1 as % of d60 (abs), shows momentum
         })
 
     dates_info = {"d1": d1, "d5": d5, "d20": d20, "d60": d60, "ref": ref}
@@ -4037,13 +4044,19 @@ def api_cn_rotation():
     sectors = []
     for name, cp in closes.items():
         d1c = cp.get(d1)
+        d1_val = d1_changes.get(name)
+        d60_val = cum_return(d1c, cp.get(d60))
+        d1_d60_ratio = None
+        if d1_val is not None and d60_val is not None and d60_val != 0:
+            d1_d60_ratio = round(abs(d1_val / d60_val) * 100, 1)
         sectors.append({
             'name': name,
             'category': categories.get(name, ''),
-            'd1': d1_changes.get(name),
+            'd1': d1_val,
             'd5': cum_return(d1c, cp.get(d5)),
             'd20': cum_return(d1c, cp.get(d20)),
-            'd60': cum_return(d1c, cp.get(d60)),
+            'd60': d60_val,
+            'd1_d60_ratio': d1_d60_ratio,
         })
 
     dates_info = {"d1": d1, "d5": d5, "d20": d20, "d60": d60}
