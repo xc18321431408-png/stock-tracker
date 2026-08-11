@@ -1627,10 +1627,22 @@ def headers(resp):
 
 # ── Data Fetching ────────────────────────────────────────────
 def fetch_sector_data(target_date=None):
-    """Fetch US ETF data from Yahoo Finance (more reliable than stockanalysis)."""
+    """Fetch US ETF data from Yahoo Finance, includes after-hours prices."""
     results = []
     for category, symbol, name in SUB_SECTORS:
         try:
+            # Fetch current price via 1m (includes after-hours)
+            current_price = None
+            url_1m = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1m&range=1d&includePrePost=true"
+            resp_1m = requests.get(url_1m, headers=YF_HEADERS, timeout=12)
+            if resp_1m.status_code == 200:
+                r_1m = resp_1m.json().get('chart',{}).get('result',[None])[0]
+                if r_1m:
+                    c1m = r_1m.get('indicators',{}).get('quote',[{}])[0].get('close',[])
+                    v1m = [c for c in c1m if c is not None]
+                    if v1m: current_price = v1m[-1]
+
+            # Fetch daily data for OHLC and prev_close
             url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}?interval=1d&range=5d"
             resp = requests.get(url, headers=YF_HEADERS, timeout=15)
             if resp.status_code != 200: continue
@@ -1650,13 +1662,15 @@ def fetch_sector_data(target_date=None):
             if len(valid) < 2: continue
             latest_idx = valid[0][0]; prev_idx = valid[1][0]
             close = close_prices[latest_idx]; prev_close = close_prices[prev_idx]
-            change_pct = ((close - prev_close) / prev_close) * 100 if prev_close else 0
+            # Use after-hours price if available, otherwise daily close
+            display_close = current_price if current_price else close
+            change_pct = ((display_close - prev_close) / prev_close) * 100 if prev_close else 0
             results.append({
                 'symbol': symbol, 'name': name, 'category': category,
                 'open': round(open_prices[latest_idx] if open_prices[latest_idx] else 0, 2),
                 'high': round(highs[latest_idx] if highs[latest_idx] else 0, 2),
                 'low': round(lows[latest_idx] if lows[latest_idx] else 0, 2),
-                'close': round(close, 2),
+                'close': round(display_close, 2),
                 'change_pct': round(change_pct, 2),
                 'volume': int(vols[latest_idx] if vols[latest_idx] else 0),
             })
@@ -1841,19 +1855,33 @@ def daily_fetch_job():
     """美股数据抓取 - 当日数据"""
     today = datetime.now().strftime('%Y-%m-%d')
     print(f"[Scheduler] US fetch for {today}")
-    data = fetch_sector_data(today)
-    if data:
-        save_to_db(data, today)
-        print(f"[Scheduler] US saved {len(data)} sectors for {today}")
+    try:
+        data = fetch_sector_data(today)
+        if data:
+            save_to_db(data, today)
+            _last_fetch_time['us'] = time.time()
+            print(f"[Scheduler] US saved {len(data)} sectors for {today}")
+        else:
+            print(f"[Scheduler] US fetch returned empty for {today}")
+    except Exception as e:
+        print(f"[Scheduler] US fetch FAILED: {e}")
+        import traceback; traceback.print_exc()
 
 def cn_daily_fetch_job():
     """A股数据抓取 - 当日数据"""
     today = datetime.now().strftime('%Y-%m-%d')
     print(f"[Scheduler] CN fetch for {today}")
-    data = fetch_cn_sector_data(today)
-    if data:
-        save_cn_to_db(data, today)
-        print(f"[Scheduler] CN saved {len(data)} sectors for {today}")
+    try:
+        data = fetch_cn_sector_data(today)
+        if data:
+            save_cn_to_db(data, today)
+            _last_fetch_time['cn'] = time.time()
+            print(f"[Scheduler] CN saved {len(data)} sectors for {today}")
+        else:
+            print(f"[Scheduler] CN fetch returned empty for {today}")
+    except Exception as e:
+        print(f"[Scheduler] CN fetch FAILED: {e}")
+        import traceback; traceback.print_exc()
 
 def _warmup_kol_cache():
     """Prefetch KOL tweets and fetch latest data at startup."""
@@ -1893,9 +1921,11 @@ def _refresh_kol_cache():
             _news_cache.pop('cn', None)
         _fetch_all_kol_tweets('us')
         _fetch_all_kol_tweets('cn')
+        _last_fetch_time['kol'] = time.time()
         print("[KOL] Cache refreshed")
     except Exception as e:
         print(f"[KOL] Cache refresh failed: {e}")
+        import traceback; traceback.print_exc()
 
 def _refresh_monthly_reports():
     """Clear technicals cache on 1st of each month so stock reports regenerate."""
