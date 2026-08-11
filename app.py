@@ -2399,13 +2399,19 @@ def api_latest():
             save_to_db(data, target_date)
             return jsonify({"date": target_date, "sectors": data, "fetched": "live", "updated_at": datetime.now().strftime('%m-%d %H:%M'), "next_update": _next_update_time('us')})
         return jsonify({"error": "no data", "date": target_date})
-    # Auto-refresh stale data when requesting latest
+    # Auto-refresh: today's data if older than 10 min, historical 24h
     if auto_refresh and rows:
         try:
             latest_fetched = rows[0]['fetched_at']
             if latest_fetched:
-                fetched_dt = datetime.strptime(latest_fetched, '%Y-%m-%d %H:%M:%S')
-                if (datetime.now() - fetched_dt).total_seconds() > 2 * 3600:
+                try:
+                    fetched_dt = datetime.strptime(latest_fetched, '%Y-%m-%d %H:%M:%S')
+                except ValueError:
+                    fetched_dt = datetime.strptime(latest_fetched[:19], '%Y-%m-%d %H:%M:%S')
+                age_seconds = (datetime.now() - fetched_dt).total_seconds()
+                is_today = (target_date == datetime.now().strftime('%Y-%m-%d'))
+                threshold = 600 if is_today else 86400
+                if age_seconds > threshold:
                     data = fetch_sector_data(target_date)
                     if data:
                         save_to_db(data, target_date)
@@ -3915,13 +3921,19 @@ def api_cn_latest():
             save_cn_to_db(data, target_date)
             return jsonify({"date": target_date, "sectors": data, "fetched": "live", "updated_at": datetime.now().strftime('%m-%d %H:%M'), "next_update": _next_update_time('cn')})
         return jsonify({"error": "no data", "date": target_date})
-    # Auto-refresh stale data when requesting latest
+    # Auto-refresh: today's data if older than 10 min, historical 24h
     if auto_refresh and rows:
         try:
             latest_fetched = rows[0]['fetched_at']
             if latest_fetched:
-                fetched_dt = datetime.strptime(latest_fetched, '%Y-%m-%d %H:%M:%S')
-                if (datetime.now() - fetched_dt).total_seconds() > 2 * 3600:
+                try:
+                    fetched_dt = datetime.strptime(latest_fetched, '%Y-%m-%d %H:%M:%S')
+                except ValueError:
+                    fetched_dt = datetime.strptime(latest_fetched[:19], '%Y-%m-%d %H:%M:%S')
+                age_seconds = (datetime.now() - fetched_dt).total_seconds()
+                is_today = (target_date == datetime.now().strftime('%Y-%m-%d'))
+                threshold = 600 if is_today else 86400
+                if age_seconds > threshold:
                     data = fetch_cn_sector_data(target_date)
                     if data:
                         save_cn_to_db(data, target_date)
