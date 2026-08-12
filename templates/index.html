@@ -503,6 +503,47 @@ canvas{max-height:380px}
     <p style="text-align:center;color:var(--muted);padding:60px">👈 点击开始回测，500次蒙特卡洛模拟<br><span style="font-size:11px">首次需要拉取股票数据，约需20-30秒</span></p>
   </div>
 </div>
+
+<!-- 通用策略回测 -->
+<div style="margin-top:24px">
+  <div class="header"><h2>📈 <span>通用策略回测</span></h2></div>
+  <div style="display:grid;grid-template-columns:320px 1fr;gap:20px">
+    <div style="background:var(--card);border-radius:16px;padding:20px;border:1px solid var(--border)">
+      <h3 style="margin-bottom:14px;font-size:14px;color:var(--accent)">⚙️ 策略参数</h3>
+      <label style="font-size:12px;color:var(--muted)">股票代码</label>
+      <input type="text" id="btSymbol" value="SPY" style="width:100%;padding:8px;margin:4px 0 12px 0;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px;text-transform:uppercase">
+      <label style="font-size:12px;color:var(--muted)">策略</label>
+      <select id="btStrategy" onchange="updateParams()" style="width:100%;padding:8px;margin:4px 0 12px 0;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;font-size:14px">
+        <option value="breakout">🚀 突破形态</option>
+        <option value="ma_cross">📈 均线交叉</option>
+        <option value="rsi">📉 RSI均值回归</option>
+        <option value="momentum">⚡ 动量突破</option>
+        <option value="sector_rotation">🔄 板块轮动</option>
+        <option value="skew_arb">📐 偏度套利</option>
+        <option value="vol_surface">🌊 波动率曲面</option>
+      </select>
+      <div id="btParams" style="margin-bottom:12px"></div>
+      <button onclick="runBacktest()" style="width:100%;padding:12px;margin-bottom:8px;background:var(--accent);border:none;color:#fff;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">▶ 运行回测</button>
+      <button onclick="runBacktestOptimize()" style="width:100%;padding:10px;background:var(--bg);border:1px solid var(--border);color:var(--accent);border-radius:8px;cursor:pointer;font-size:13px">🔍 网格搜索最优参数</button>
+      <div id="optimizeStatus" style="font-size:11px;color:var(--muted);margin-top:8px;text-align:center"></div>
+    </div>
+    <div>
+      <div id="btResult" style="background:var(--card);border-radius:16px;padding:20px;border:1px solid var(--border);margin-bottom:16px">
+        <h3 style="margin-bottom:12px">📋 回测结果</h3>
+        <p style="color:var(--muted);text-align:center;padding:20px">👈 选择策略和标的，点击运行回测</p>
+      </div>
+      <div id="btChartBox" style="background:var(--card);border-radius:16px;padding:20px;border:1px solid var(--border);margin-bottom:16px;display:none">
+        <h4 style="margin-bottom:8px;font-size:13px;color:var(--muted)">📊 资金曲线</h4>
+        <div id="backtestChart" style="height:300px;width:100%"></div>
+      </div>
+      <div style="background:var(--card);border-radius:16px;padding:20px;border:1px solid var(--border)">
+        <h4 style="margin-bottom:8px;font-size:13px;color:var(--muted)">📜 历史记录</h4>
+        <table id="btHistoryTable" style="width:100%;border-collapse:collapse"><tbody><tr><td colspan="6" style="padding:16px;color:var(--muted);text-align:center">暂无记录</td></tr></tbody></table>
+      </div>
+    </div>
+  </div>
+  <div id="btMeta" style="text-align:center;font-size:11px;color:var(--muted);margin-top:8px"></div>
+</div>
 </div>
 
 <div class="footer">US Stock Sector Tracker v2.0 | 数据每日7:00更新 | 不构成投资建议</div>
@@ -2033,10 +2074,17 @@ function updateParams() {
          + '<label>标准差倍数</label><input type="number" id="pBBStd" value="2.0" min="1.0" max="3.0" step="0.1">'
          + '<label>宽度阈值</label><input type="number" id="pEntryThresh" value="2.0" min="0.5" max="5.0" step="0.1">'
          + '<div style="font-size:11px;color:var(--muted);margin-top:4px">布林带宽度 > 阈值 → 波动率收缩做多 | 极窄 → 扩张做空</div>';
+  } else if (strat === 'breakout') {
+    html = '<label>BB带宽收窄阈值(%)</label><input type="number" id="pSqueezePct" value="20" min="10" max="50">'
+         + '<label>最小平台测试次数</label><input type="number" id="pSupportTests" value="2" min="1" max="5">'
+         + '<label>最小放量比</label><input type="number" id="pVolRatio" value="1.5" min="1.0" max="3.0" step="0.1">'
+         + '<label>持仓天数</label><input type="number" id="pHoldDays" value="5" min="1" max="20">'
+         + '<div style="font-size:11px;color:var(--muted);margin-top:4px">BB收窄+平台测试+放量突破 → 买入持有N天</div>';
   }
   document.getElementById('btParams').innerHTML = html;
 }
 
+// Legacy backtest runner (overridden by second definition below)
 async function runBacktest() {
   const symbol = document.getElementById('btSymbol').value.toUpperCase();
   const strategy = document.getElementById('btStrategy').value;
@@ -2059,6 +2107,11 @@ async function runBacktest() {
     params.bb_period = parseInt(document.getElementById('pBBPeriod')?.value || 20);
     params.bb_std = parseFloat(document.getElementById('pBBStd')?.value || 2.0);
     params.entry_thresh = parseFloat(document.getElementById('pEntryThresh')?.value || 2.0);
+  } else if (strategy === 'breakout') {
+    params.squeeze_pct = parseInt(document.getElementById('pSqueezePct')?.value || 20);
+    params.support_tests = parseInt(document.getElementById('pSupportTests')?.value || 2);
+    params.vol_ratio = parseFloat(document.getElementById('pVolRatio')?.value || 1.5);
+    params.hold_days = parseInt(document.getElementById('pHoldDays')?.value || 5);
   }
 
   document.getElementById('btResult').innerHTML = '<h3>📋 回测结果</h3><p style="color:var(--muted)">⏳ 正在计算...</p>';
@@ -2862,6 +2915,19 @@ async function runBacktest() {
     params.overbought = parseInt(document.getElementById('pOverbought')?.value || 70);
   } else if (strategy === 'momentum' || strategy === 'sector_rotation') {
     params.lookback = parseInt(document.getElementById('pLookback')?.value || 20);
+  } else if (strategy === 'skew_arb') {
+    params.short_window = parseInt(document.getElementById('pShortWin')?.value || 5);
+    params.long_window = parseInt(document.getElementById('pLongWin')?.value || 20);
+    params.entry_ratio = parseFloat(document.getElementById('pEntryRatio')?.value || 1.5);
+  } else if (strategy === 'vol_surface') {
+    params.bb_period = parseInt(document.getElementById('pBBPeriod')?.value || 20);
+    params.bb_std = parseFloat(document.getElementById('pBBStd')?.value || 2.0);
+    params.entry_thresh = parseFloat(document.getElementById('pEntryThresh')?.value || 2.0);
+  } else if (strategy === 'breakout') {
+    params.squeeze_pct = parseInt(document.getElementById('pSqueezePct')?.value || 20);
+    params.support_tests = parseInt(document.getElementById('pSupportTests')?.value || 2);
+    params.vol_ratio = parseFloat(document.getElementById('pVolRatio')?.value || 1.5);
+    params.hold_days = parseInt(document.getElementById('pHoldDays')?.value || 5);
   }
 
   document.getElementById('btResult').innerHTML = '<h3>📋 回测结果</h3><p style="color:var(--muted)">⏳ 正在计算...</p>';
@@ -2953,6 +3019,21 @@ async function runBacktestOptimize() {
           paramGrid.push({ period: p, oversold: o, overbought: b });
   } else if (strategy === 'momentum' || strategy === 'sector_rotation') {
     for (let l = 5; l <= 40; l += 5) paramGrid.push({ lookback: l });
+  } else if (strategy === 'skew_arb') {
+    for (let sw = 3; sw <= 10; sw += 2)
+      for (let lw = 10; lw <= 30; lw += 10)
+        for (let er = 1.3; er <= 2.0; er += 0.3)
+          paramGrid.push({ short_window: sw, long_window: lw, entry_ratio: Math.round(er*10)/10 });
+  } else if (strategy === 'vol_surface') {
+    for (let bp = 10; bp <= 40; bp += 10)
+      for (let et = 1.0; et <= 3.0; et += 0.5)
+        paramGrid.push({ bb_period: bp, bb_std: 2.0, entry_thresh: Math.round(et*10)/10 });
+  } else if (strategy === 'breakout') {
+    for (let sp = 15; sp <= 35; sp += 10)
+      for (let st = 1; st <= 3; st++)
+        for (let vr = 1.2; vr <= 2.0; vr += 0.4)
+          for (let hd = 3; hd <= 10; hd += 2)
+            paramGrid.push({ squeeze_pct: sp, support_tests: st, vol_ratio: Math.round(vr*10)/10, hold_days: hd });
   }
 
   let best = null;
@@ -2987,6 +3068,19 @@ async function runBacktestOptimize() {
       document.getElementById('pOverbought').value = best.params.overbought;
     } else if (strategy === 'momentum' || strategy === 'sector_rotation') {
       document.getElementById('pLookback').value = best.params.lookback;
+    } else if (strategy === 'skew_arb') {
+      document.getElementById('pShortWin').value = best.params.short_window;
+      document.getElementById('pLongWin').value = best.params.long_window;
+      document.getElementById('pEntryRatio').value = best.params.entry_ratio;
+    } else if (strategy === 'vol_surface') {
+      document.getElementById('pBBPeriod').value = best.params.bb_period;
+      document.getElementById('pBBStd').value = best.params.bb_std;
+      document.getElementById('pEntryThresh').value = best.params.entry_thresh;
+    } else if (strategy === 'breakout') {
+      document.getElementById('pSqueezePct').value = best.params.squeeze_pct;
+      document.getElementById('pSupportTests').value = best.params.support_tests;
+      document.getElementById('pVolRatio').value = best.params.vol_ratio;
+      document.getElementById('pHoldDays').value = best.params.hold_days;
     }
     renderBacktestResult(best);
   } else {

@@ -2426,6 +2426,49 @@ def run_backtest(prices, strategy, params):
             elif bbw < 0.03:
                 signals[i] = -1  # extremely narrow → bet on expansion → sell
 
+    elif strategy == 'breakout':
+        # Breakout strategy: BB squeeze + support tests + volume breakout
+        # Buy when all three conditions align, hold for N days
+        squeeze_pct = params.get('squeeze_pct', 20)       # BB带宽收窄阈值(%)
+        min_support_tests = params.get('support_tests', 2) # 最少平台测试次数
+        min_vol_ratio = params.get('vol_ratio', 1.5)       # 最小放量比
+        hold_days = params.get('hold_days', 5)             # 持仓天数
+
+        for i in range(30, n):
+            # 1. BB squeeze: compare BB bandwidth now vs 10-30 days ago
+            w_now = prices[i-20:i]
+            ma_now = sum(w_now) / 20
+            std_now = (sum((x - ma_now)**2 for x in w_now) / 20) ** 0.5
+            bbw_now = (2 * std_now) / ma_now * 100 if ma_now > 0 else 0
+
+            w_prev = prices[i-30:i-10]
+            ma_prev = sum(w_prev) / 20
+            std_prev = (sum((x - ma_prev)**2 for x in w_prev) / 20) ** 0.5
+            bbw_prev = (2 * std_prev) / ma_prev * 100 if ma_prev > 0 else 0
+
+            squeeze = bbw_prev > 0 and bbw_now < bbw_prev * (1 - squeeze_pct / 100)
+
+            # 2. Support tests in last 20 days
+            support_tests = 0
+            pr = prices[i-20:i+1]
+            for a in range(len(pr) - 3):
+                low_a = pr[a]
+                for b in range(a + 3, min(a + 16, len(pr))):
+                    if low_a > 0 and abs(pr[b] - low_a) / low_a < 0.02:
+                        support_tests += 1
+                        break
+
+            # 3. Breakout + volume
+            high_20 = max(prices[i-21:i])  # 20-day high before today (excluding today)
+            breakout = prices[i] > high_20 and support_tests >= min_support_tests and squeeze
+
+            if breakout:
+                signals[i] = 1
+                # Set sell signal after hold_days (if still in range)
+                exit_day = i + hold_days
+                if exit_day < n:
+                    signals[exit_day] = -1
+
     # Calculate positions & returns
     for i in range(1, n):
         if signals[i] == 1: position[i] = 1
