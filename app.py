@@ -1501,6 +1501,7 @@ CN_SECTOR_STOCKS = {
     "房地产": [
         ("000002.SZ","万科A","房地产开发龙头"),
         ("600048.SS","保利发展","央企地产龙头"),
+        ("600266.SS","城建发展","北京城建龙头"),
         ("001979.SZ","招商蛇口","园区开发+地产"),
         ("600606.SS","绿地控股","综合性地产"),
         ("600383.SS","金地集团","稳健型房企"),
@@ -1534,6 +1535,18 @@ CN_SECTOR_STOCKS = {
         ("603568.SS","伟明环保","垃圾焚烧设备"),
         ("002672.SZ","东江环保","危废处理"),
         ("300422.SZ","博世科","水处理+土壤修复"),
+    ],
+    "商业零售": [
+        ("000715.SZ","中兴商业","沈阳零售百货龙头"),
+        ("002024.SZ","苏宁易购","电商+实体零售"),
+        ("601933.SS","永辉超市","生鲜超市龙头"),
+        ("002697.SZ","红旗连锁","川渝便利店龙头"),
+        ("603708.SS","家家悦","山东连锁超市"),
+        ("601116.SS","三江购物","阿里新零售概念"),
+        ("002251.SZ","步步高","中部零售+商业地产"),
+        ("600859.SS","王府井","北京百货龙头"),
+        ("600827.SS","百联股份","上海商业零售龙头"),
+        ("002419.SZ","天虹股份","全国连锁百货"),
     ],
 }
 def init_db():
@@ -2122,7 +2135,7 @@ def _run_screener(market='us'):
     sectors = SECTOR_STOCKS if market != 'cn' else CN_SECTOR_STOCKS
 
     for sector_name, stocks in sectors.items():
-        for info in stocks[:3]:
+        for info in stocks[:8]:
             sym = info[0]; name = info[1]
             if sym in symbols_processed: continue
             symbols_processed.add(sym)
@@ -2207,7 +2220,7 @@ def _run_backtest_screener(market='us'):
     sectors = SECTOR_STOCKS if market != 'cn' else CN_SECTOR_STOCKS
 
     for sector_name, stocks in sectors.items():
-        for info in stocks[:3]:
+        for info in stocks[:8]:
             sym = info[0]; name = info[1]
             if sym in symbols_processed: continue
             symbols_processed.add(sym)
@@ -2830,7 +2843,7 @@ def _do_backtest():
         stock_volumes = {}  # {symbol: {date: volume}}
         symbols_to_fetch = set()
         for sector_name, stocks in SECTOR_STOCKS.items():
-            for info in stocks[:3]: symbols_to_fetch.add(info[0])  # top 3 per sector
+            for info in stocks[:8]: symbols_to_fetch.add(info[0])  # top 3 per sector
 
         def _fetch_one_stock(sym):
             try:
