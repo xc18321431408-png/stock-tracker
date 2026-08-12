@@ -1938,6 +1938,87 @@ def _refresh_monthly_reports():
 # ── Smart Stock Screener ──
 _screener_cache = {'ts': 0, 'results': []}
 
+def _detect_breakout_pattern(closes, vols=None):
+    """Detect breakout pattern: 形态好(BB squeeze) + 多次测试平台 + 大动能突破.
+    Returns (score, details_dict) where score 0-100, higher = stronger breakout."""
+    n = len(closes)
+    if n < 30: return 0, {}
+    score = 0
+    details = {}
+
+    # 1. 形态好: BB带宽收窄（squeeze）→ 布林带压缩说明筹码沉淀，蓄势待发
+    w20 = closes[-20:]
+    ma20 = sum(w20) / 20
+    std20 = (sum((x - ma20)**2 for x in w20) / 20) ** 0.5
+    bbw_now = (2 * std20) / ma20 * 100 if ma20 > 0 else 0  # BB Width %
+
+    if n >= 30:
+        w_prev = closes[-30:-10]
+        ma_prev = sum(w_prev) / 20
+        std_prev = (sum((x - ma_prev)**2 for x in w_prev) / 20) ** 0.5
+        bbw_prev = (2 * std_prev) / ma_prev * 100 if ma_prev > 0 else 0
+
+        if bbw_prev > 0 and bbw_now < bbw_prev * 0.8:
+            # BB bandwidth narrowed by 20%+ → 形态收敛
+            squeeze_pct = round((1 - bbw_now / bbw_prev) * 100, 1)
+            details['bb_squeeze'] = squeeze_pct
+            if squeeze_pct > 50: score += 35
+            elif squeeze_pct > 30: score += 25
+            elif squeeze_pct > 20: score += 15
+        elif bbw_now < 5:
+            details['bb_squeeze'] = round(bbw_now, 1)
+            score += 10  # already narrow bands
+
+    # 2. 多次测试平台位: 最近20天内至少有2次回踩同一价格区间（误差<2%）
+    support_tests = 0
+    price_range = closes[-20:]
+    for i in range(len(price_range) - 3):
+        low_i = price_range[i]
+        # Check if any other lows in the next 15 days are within 2%
+        for j in range(i + 3, min(i + 16, len(price_range))):
+            if low_i > 0 and abs(price_range[j] - low_i) / low_i < 0.02:
+                support_tests += 1
+                break
+    details['support_tests'] = min(support_tests, 5)
+    if support_tests >= 3: score += 30       # 多次确认支撑
+    elif support_tests >= 2: score += 20
+    elif support_tests >= 1: score += 10
+
+    # 3. 大动能突破: 今日突破20日高点 + 放量
+    today_close = closes[-1]
+    high_20 = max(closes[-21:-1]) if len(closes) >= 21 else max(closes[:-1])
+    breakout = today_close > high_20
+    details['breakout'] = breakout
+    details['high_20'] = round(high_20, 2)
+
+    if breakout:
+        breakout_pct = round((today_close - high_20) / high_20 * 100, 2)
+        details['breakout_pct'] = breakout_pct
+        # Volume confirmation
+        vol_ratio = 1.0
+        if vols and len(vols) >= 20:
+            vol_avg = sum(v or 0 for v in vols[-21:-1]) / 20
+            vol_now = vols[-1] or 0
+            vol_ratio = round(vol_now / vol_avg, 2) if vol_avg > 0 else 1.0
+        details['vol_ratio'] = vol_ratio
+
+        if vol_ratio >= 2.0:
+            score += 35  # 放量突破 → 最强信号
+        elif vol_ratio >= 1.5:
+            score += 25
+        elif vol_ratio >= 1.2:
+            score += 15
+        else:
+            score += 5   # 缩量突破，力度弱
+    else:
+        # Not a breakout yet, check if price is near high (酝酿突破)
+        near_high = today_close > high_20 * 0.97
+        details['near_breakout'] = near_high
+        if near_high:
+            score += 10  # 接近突破边缘
+
+    return score, details
+
 def _quick_score_stock(symbol, name, sector, closes, vols=None):
     """Score on: low RSI + high Sharpe + MACD uptrend + volume expansion + BB proximity."""
     n = len(closes)
@@ -2036,6 +2117,7 @@ def _quick_score_stock(symbol, name, sector, closes, vols=None):
 def _run_screener(market='us'):
     """Scan sector stocks and return top picks."""
     results = []
+    breakout_candidates = []
     symbols_processed = set()
     sectors = SECTOR_STOCKS if market != 'cn' else CN_SECTOR_STOCKS
 
@@ -2057,6 +2139,22 @@ def _run_screener(market='us'):
                 if len(closes) < 60: continue
                 scored = _quick_score_stock(sym, name, sector_name, closes, vols)
                 if scored: results.append(scored)
+
+                # Also detect breakout pattern
+                breakout_score, breakout_detail = _detect_breakout_pattern(closes, vols)
+                if breakout_score >= 35:  # Only include meaningful signals
+                    breakout_candidates.append({
+                        'symbol': sym, 'name': name, 'sector': sector_name,
+                        'close': round(closes[-1], 2),
+                        'breakout_score': breakout_score,
+                        'breakout': breakout_detail.get('breakout', False),
+                        'near_breakout': breakout_detail.get('near_breakout', False),
+                        'bb_squeeze': breakout_detail.get('bb_squeeze'),
+                        'support_tests': breakout_detail.get('support_tests', 0),
+                        'vol_ratio': breakout_detail.get('vol_ratio', 1.0),
+                        'breakout_pct': breakout_detail.get('breakout_pct'),
+                        'high_20': breakout_detail.get('high_20'),
+                    })
                 time.sleep(0.1)
             except: continue
 
@@ -2077,7 +2175,23 @@ def _run_screener(market='us'):
                     if v1m: r['close'] = round(v1m[-1], 2)
             time.sleep(0.05)
         except: pass
-    return top
+
+    # Update after-hours price for breakout candidates & sort
+    for r in breakout_candidates:
+        try:
+            url_1m = f"https://query1.finance.yahoo.com/v8/finance/chart/{r['symbol']}?interval=1m&range=1d&includePrePost=true"
+            resp_1m = requests.get(url_1m, headers=YF_HEADERS, timeout=6)
+            if resp_1m.status_code == 200:
+                rr = resp_1m.json().get('chart',{}).get('result',[None])[0]
+                if rr:
+                    c1m = rr.get('indicators',{}).get('quote',[{}])[0].get('close',[])
+                    v1m = [c for c in c1m if c is not None]
+                    if v1m: r['close'] = round(v1m[-1], 2)
+            time.sleep(0.05)
+        except: pass
+    breakout_candidates.sort(key=lambda x: x['breakout_score'], reverse=True)
+
+    return top, breakout_candidates[:15]
 
 def _run_backtest_screener(market='us'):
     """Run backtest strategies on top stocks, return those with buy signals."""
@@ -2149,9 +2263,10 @@ def api_screener():
     now = time.time()
     if now - _screener_cache['ts'] < 86400:
         results = _screener_cache['results']
+        breakout = _screener_cache.get('breakout', [])
     else:
-        results = _run_screener('us')
-        _screener_cache = {'ts': now, 'results': results}
+        results, breakout = _run_screener('us')
+        _screener_cache = {'ts': now, 'results': results, 'breakout': breakout}
     # Backtest screener (separate cache)
     if now - _bt_screener_cache['ts'] < 86400:
         bt_results = _bt_screener_cache['results']
@@ -2160,28 +2275,29 @@ def api_screener():
         _bt_screener_cache = {'ts': now, 'results': bt_results}
     return jsonify({
         "results": results,
+        "breakout": breakout,
         "backtest": bt_results,
         "updated": datetime.fromtimestamp(_screener_cache['ts']).isoformat()
     })
-    _screener_cache = {'ts': now, 'results': results}
-    return jsonify({"results": results, "updated": datetime.now().isoformat()})
 
 @app.route('/api/cn/screener/us')
 def api_cn_screener():
     global _screener_cache_cn
     now = time.time()
     if now - _screener_cache_cn['ts'] < 86400:
-        return jsonify({"results": _screener_cache_cn['results'], "updated": datetime.fromtimestamp(_screener_cache_cn['ts']).isoformat()})
-    results = _run_screener('cn')
-    _screener_cache_cn = {'ts': now, 'results': results}
-    return jsonify({"results": results, "updated": datetime.now().isoformat()})
+        return jsonify({"results": _screener_cache_cn['results'], "breakout": _screener_cache_cn.get('breakout', []), "updated": datetime.fromtimestamp(_screener_cache_cn['ts']).isoformat()})
+    results, breakout = _run_screener('cn')
+    _screener_cache_cn = {'ts': now, 'results': results, 'breakout': breakout}
+    return jsonify({"results": results, "breakout": breakout, "updated": datetime.now().isoformat()})
 
 def _refresh_screener():
     global _screener_cache, _screener_cache_cn
     print("[Screener] Refreshing...")
-    _screener_cache = {'ts': time.time(), 'results': _run_screener('us')}
-    _screener_cache_cn = {'ts': time.time(), 'results': _run_screener('cn')}
-    print(f"[Screener] Done: {len(_screener_cache['results'])} US + {len(_screener_cache_cn['results'])} CN")
+    us_results, us_breakout = _run_screener('us')
+    cn_results, cn_breakout = _run_screener('cn')
+    _screener_cache = {'ts': time.time(), 'results': us_results, 'breakout': us_breakout}
+    _screener_cache_cn = {'ts': time.time(), 'results': cn_results, 'breakout': cn_breakout}
+    print(f"[Screener] Done: {len(us_results)} US + {len(cn_results)} CN, {len(us_breakout)} US breakout + {len(cn_breakout)} CN breakout")
 
 _last_fetch_time = {'us': None, 'cn': None, 'kol': None}
 
