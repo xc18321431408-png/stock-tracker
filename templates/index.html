@@ -1054,7 +1054,27 @@ async function loadScreener() {
     const resp = await fetch(apiBase('/screener/us'));
     const data = await resp.json();
     const results = data.results || [];
+    const breakout = data.breakout || [];
     const btResults = data.backtest || [];
+
+    // ── 跨区重复检测：2区重复 vs 3区共振 ──
+    const s1 = new Set(results.map(r => r.symbol));
+    const s2 = new Set(breakout.map(r => r.symbol));
+    const s3 = new Set(btResults.map(r => r.symbol));
+    const dupCount = {}; // symbol -> count (1-3)
+    for (const sym of new Set([...s1, ...s2, ...s3])) {
+      let c = 0;
+      if (s1.has(sym)) c++;
+      if (s2.has(sym)) c++;
+      if (s3.has(sym)) c++;
+      dupCount[sym] = c;
+    }
+    function dupBadge(sym) {
+      const c = dupCount[sym] || 1;
+      if (c >= 3) return '<span style="background:linear-gradient(135deg,#ef4444,#ec4899);color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-left:4px" title="综合+突破+回测 三重共振">🔥 三共振</span>';
+      if (c >= 2) return '<span style="background:linear-gradient(135deg,#f59e0b,#f97316);color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;margin-left:4px" title="两个选股区同时命中">⚡ 双信号</span>';
+      return '';
+    }
 
     let html = '';
 
@@ -1070,7 +1090,7 @@ async function loadScreener() {
         const rsiColor = r.rsi < 30 ? 'var(--green)' : r.rsi < 40 ? 'var(--accent)' : 'var(--gold)';
         const sharpeColor = r.sharpe > 2 ? 'var(--red)' : r.sharpe > 1 ? 'var(--accent)' : 'var(--text)';
         html += '<div style="background:var(--bg);border-radius:10px;padding:12px 14px;border:1px solid var(--border);border-left:4px solid ' + rsiColor + '">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-weight:700;font-size:14px;color:var(--accent)">' + r.symbol + '</span><span style="font-size:11px;color:var(--muted)">' + r.sector + '</span></div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-weight:700;font-size:14px;color:var(--accent)">' + r.symbol + dupBadge(r.symbol) + '</span><span style="font-size:11px;color:var(--muted)">' + r.sector + '</span></div>' +
           '<div style="font-size:12px;color:var(--text);margin-bottom:8px">' + r.name + ' | 💲' + r.close + '</div>' +
           '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px">' +
           '<div style="text-align:center;background:rgba(0,0,0,0.15);border-radius:6px;padding:6px"><div style="color:var(--muted)">RSI</div><div style="font-weight:700;font-size:16px;color:' + rsiColor + '">' + r.rsi + '</div></div>' +
@@ -1087,7 +1107,6 @@ async function loadScreener() {
     html += '</div>';
 
     // ── Section 1.5: 突破形态选股 ──
-    const breakout = data.breakout || [];
     html += '<div style="margin-bottom:24px">';
     html += '<h3 style="margin-bottom:8px;color:var(--red);font-size:16px">🚀 突破形态选股</h3>';
     html += '<p style="font-size:11px;color:var(--muted);margin-bottom:12px">筛选逻辑：形态好(BB收窄) + 多次测试平台位 + 大动能突破(放量破前高) | 得分≥35才算信号</p>';
@@ -1101,7 +1120,7 @@ async function loadScreener() {
         const statusIcon = r.breakout ? '🔥 已突破' : (r.near_breakout ? '⏳ 接近突破' : '📐 形态蓄力');
         const statusColor = r.breakout ? 'var(--red)' : (r.near_breakout ? 'var(--gold)' : 'var(--accent)');
         html += '<div style="background:var(--bg);border-radius:10px;padding:12px 14px;border:1px solid var(--border);border-left:4px solid var(--red)">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-weight:700;font-size:14px;color:var(--accent)">' + r.symbol + '</span><span style="font-size:11px;color:var(--muted)">' + r.sector + '</span></div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-weight:700;font-size:14px;color:var(--accent)">' + r.symbol + dupBadge(r.symbol) + '</span><span style="font-size:11px;color:var(--muted)">' + r.sector + '</span></div>' +
           '<div style="font-size:12px;color:var(--text);margin-bottom:6px">' + r.name + ' | 💲' + r.close +
           (r.breakout_pct ? ' <span style="color:var(--red);font-weight:600">突破+' + r.breakout_pct + '%</span>' : '') + '</div>' +
           '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:11px">' +
@@ -1128,7 +1147,7 @@ async function loadScreener() {
       html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px">';
       for (const r of btResults.slice(0,12)) {
         html += '<div style="background:var(--bg);border-radius:10px;padding:12px 14px;border:1px solid var(--border);border-left:4px solid var(--accent)">' +
-          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-weight:700;font-size:14px;color:var(--accent)">' + r.symbol + '</span><span style="font-size:11px;color:var(--muted)">' + r.sector + '</span></div>' +
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-weight:700;font-size:14px;color:var(--accent)">' + r.symbol + dupBadge(r.symbol) + '</span><span style="font-size:11px;color:var(--muted)">' + r.sector + '</span></div>' +
           '<div style="font-size:12px;color:var(--text);margin-bottom:6px">' + r.name + ' | 💲' + r.price + '</div>' +
           '<div style="display:flex;justify-content:space-between;align-items:center;font-size:11px"><span style="color:var(--gold);font-weight:600">📡 ' + r.strategy + '</span>' +
           '<span style="color:var(--muted)">回测收益: <b style="color:' + (r.total_return>0?'var(--red)':'var(--green)') + '">' + (r.total_return>0?'+':'') + r.total_return.toFixed(1) + '%</b></span></div>' +
