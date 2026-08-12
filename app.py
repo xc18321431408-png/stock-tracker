@@ -2269,6 +2269,7 @@ def _run_backtest_screener(market='us'):
 
 _screener_cache_cn = {'ts': 0, 'results': []}
 _bt_screener_cache = {'ts': 0, 'results': []}
+_bt_screener_cache_cn = {'ts': 0, 'results': []}
 
 @app.route('/api/screener/us')
 def api_screener():
@@ -2295,22 +2296,55 @@ def api_screener():
 
 @app.route('/api/cn/screener/us')
 def api_cn_screener():
-    global _screener_cache_cn
+    global _screener_cache_cn, _bt_screener_cache_cn
     now = time.time()
     if now - _screener_cache_cn['ts'] < 86400:
-        return jsonify({"results": _screener_cache_cn['results'], "breakout": _screener_cache_cn.get('breakout', []), "updated": datetime.fromtimestamp(_screener_cache_cn['ts']).isoformat()})
+        bt = _bt_screener_cache_cn.get('results', [])
+        return jsonify({"results": _screener_cache_cn['results'], "breakout": _screener_cache_cn.get('breakout', []), "backtest": bt, "updated": datetime.fromtimestamp(_screener_cache_cn['ts']).isoformat()})
     results, breakout = _run_screener('cn')
     _screener_cache_cn = {'ts': now, 'results': results, 'breakout': breakout}
-    return jsonify({"results": results, "breakout": breakout, "updated": datetime.now().isoformat()})
+    # Also refresh CN backtest
+    try:
+        bt_cn = _run_backtest_screener('cn')
+        _bt_screener_cache_cn = {'ts': now, 'results': bt_cn}
+    except Exception as e:
+        print(f"[Screener] CN BT failed: {e}")
+        bt_cn = _bt_screener_cache_cn.get('results', [])
+    return jsonify({"results": results, "breakout": breakout, "backtest": bt_cn, "updated": datetime.now().isoformat()})
 
 def _refresh_screener():
-    global _screener_cache, _screener_cache_cn
+    global _screener_cache, _screener_cache_cn, _bt_screener_cache, _bt_screener_cache_cn
     print("[Screener] Refreshing...")
-    us_results, us_breakout = _run_screener('us')
-    cn_results, cn_breakout = _run_screener('cn')
-    _screener_cache = {'ts': time.time(), 'results': us_results, 'breakout': us_breakout}
-    _screener_cache_cn = {'ts': time.time(), 'results': cn_results, 'breakout': cn_breakout}
-    print(f"[Screener] Done: {len(us_results)} US + {len(cn_results)} CN, {len(us_breakout)} US breakout + {len(cn_breakout)} CN breakout")
+    try:
+        us_results, us_breakout = _run_screener('us')
+        _screener_cache = {'ts': time.time(), 'results': us_results, 'breakout': us_breakout}
+        _last_fetch_time['screener_us'] = time.time()
+        print(f"[Screener] US: {len(us_results)} scored + {len(us_breakout)} breakout")
+    except Exception as e:
+        print(f"[Screener] US FAILED: {e}")
+        import traceback; traceback.print_exc()
+    try:
+        cn_results, cn_breakout = _run_screener('cn')
+        _screener_cache_cn = {'ts': time.time(), 'results': cn_results, 'breakout': cn_breakout}
+        _last_fetch_time['screener_cn'] = time.time()
+        print(f"[Screener] CN: {len(cn_results)} scored + {len(cn_breakout)} breakout")
+    except Exception as e:
+        print(f"[Screener] CN FAILED: {e}")
+        import traceback; traceback.print_exc()
+    # Also refresh backtest screener
+    try:
+        bt_us = _run_backtest_screener('us')
+        _bt_screener_cache = {'ts': time.time(), 'results': bt_us}
+        print(f"[Screener] BT US: {len(bt_us)} signals")
+    except Exception as e:
+        print(f"[Screener] BT US FAILED: {e}")
+    try:
+        bt_cn = _run_backtest_screener('cn')
+        _bt_screener_cache_cn = {'ts': time.time(), 'results': bt_cn}
+        print(f"[Screener] BT CN: {len(bt_cn)} signals")
+    except Exception as e:
+        print(f"[Screener] BT CN FAILED: {e}")
+    print(f"[Screener] Full refresh done at {datetime.now().isoformat()}")
 
 _last_fetch_time = {'us': None, 'cn': None, 'kol': None}
 
@@ -2325,14 +2359,23 @@ scheduler.add_job(cn_daily_fetch_job, 'cron', hour=15, minute=30)
 scheduler.add_job(_refresh_kol_cache, 'interval', minutes=30)
 # Stock reports: refresh on 1st of each month at 8:00 AM
 scheduler.add_job(_refresh_monthly_reports, 'cron', day=1, hour=8, minute=0)
+# Smart screener: refresh every 8 hours (5am / 1pm / 9pm Beijing)
+scheduler.add_job(_refresh_screener, 'cron', hour=5, minute=7)
+scheduler.add_job(_refresh_screener, 'cron', hour=13, minute=7)
+scheduler.add_job(_refresh_screener, 'cron', hour=21, minute=7)
 scheduler.start()
-print("[Scheduler] Started: US 03:30/04:00, CN 14:30/15:00 (Beijing time)")
+print("[Scheduler] Started: US 03:30/04:30, CN 14:30/15:30, Screener 05:07/13:07/21:07 (Beijing time)")
 
-# Warm up KOL cache shortly after startup (in background thread)
+# Warm up KOL cache + screener shortly after startup
 def _delayed_warmup():
     time.sleep(10)  # Wait 10s for app to fully start
     _build_ticker_sector_map()
     _warmup_kol_cache()
+    print("[Warmup] Running initial screener refresh...")
+    try:
+        _refresh_screener()
+    except Exception as e:
+        print(f"[Warmup] Screener warmup failed: {e}")
 
 threading.Thread(target=_delayed_warmup, daemon=True).start()
 
